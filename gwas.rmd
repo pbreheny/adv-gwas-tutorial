@@ -207,6 +207,75 @@ Individuals look good -- SNPs, on the other hand, there are definitely some SNPs
 
 However, I'm commenting these lines out for now, since if we subset the data at this point, it won't match the column summaries, etc.
 
+### Imputation
+
+A common method of dealing with SNPs with missing data is imputation. This involves replacing missing SNP values with what these values are predicted to be, based on a subjects' surrounding SNP values that are not missing. 
+
+We can first check how many SNPs have any missing data:
+```{r, any-miss}
+table(cs$Call.rate == 1)
+```
+This tells us that 172633 SNPs have no missingness, while 688840 have some level of missingness. We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has many options and things that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where we first determines a set of "tag" SNPS, which will be used to help predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to our genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
+
+```{r, impute}
+# determine tagging SNPs. Note: this can take a few minutes
+rules <- snp.imputation(obj$genotypes, minA=0) 
+
+# apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
+imputed <- impute.snps(rules, obj$genotypes, as.numeric=FALSE)
+
+# how many SNPs still have missing data after imputation?
+cs.imputed <- col.summary(imputed)
+table(cs.imputed$Call.rate == 1)
+```
+Even after imputation, there are still 305651 SNPs with missing data. If a large proportion of these SNPs are missing, we may wish to exclude them.
+
+```{r}
+# how many SNPs cannot be imputed and still have >= 50% missing values?
+table(cs.imputed$Call.rate <= 0.5)
+# these look weird I think because there are non-polygenic snps and maybe nonstandard chr included...
+
+# looking at the map file there are a lot of NA alleles (?)
+# > sum(is.na(obj$map$allele.1))
+# [1] 26154
+# > sum(is.na(obj$map$allele.2))
+# [1] 1
+
+# throw out SNPs that have >= 50% missingness, even after imputation
+# imputed2 <- imputed[, cs.imputed$Call.rate > 0.5]
+
+# impute remaining missing values with HWE expected value (SNP mean)
+# missing <- table(snpStats::col.summary(out2)$Call.rate == 1)
+
+# which SNPs have missingness
+# to_impute <- which(cs.imputed$Call.rate < 1)
+
+# subset to a SnpMatrix with only SNPs with some missingness - we want to loop
+# over these to replace missing values with the mean, but it's a waste of time
+# to loop over the SNPs with no missingness 
+# miss <- imputed[, to_impute]
+
+# this is done in a way where only one SNP at a time is converted to a numeric - otherwise this
+# is computationally too expensive in R
+# imputed_mean <- sapply(1:ncol(miss), function(x){
+#   s <- drop(as(miss[,x], 'numeric'))
+#   if (all(is.na(s))) {
+#     print(x)
+#     return(miss[,x])
+#   } else {
+#     idx <- which(is.na(s)) # look for missing values in a numeric vector
+#     s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP's mean
+#     raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+#   return(raw)
+#   }
+# })
+# 
+# imputed3 <- imputed2
+# imputed3@.Data[, to_impute] <- imputed_mean
+```
+
+
+
 ## Sex check
 
 Since we have genetic data on these individuals, including the X chromosome, we can determine (or at least, estimate) their "genetic sex" and compare that to the sex that is recorded in their clinical information.  A discrepancy is very troubling, as it may be the result of a sample being switched or mis-labeled (there are other explanations as well).
@@ -248,7 +317,7 @@ An appropriate cutoff definitely depends on sample size -- the larger the sample
 hist(cs$MAF, breaks=seq(0, 0.5, 0.01), border='white', col='gray', las=1)
 ```
 
-With a sample size of `r nrow(obj$genotypes)`, I would say a reasonble MAF would be something like 0.001 (0.1%).
+With a sample size of `r nrow(obj$genotypes)`, I would say a reasonable MAF would be something like 0.001 (0.1%).
 
 ```{r maf-exclude}
 # How many SNPs would this exclude?
@@ -274,6 +343,23 @@ table(p_hwe < 10^(-10))
 # no A/A's or B/B's?  Something is definitely wrong:
 table(as(obj$genotypes[,which.max(cs$z.HWE)], 'character'))
 ```
+
+<!-- ## Polygenic and chromosome checks -->
+
+<!-- Another element of the SNP ("column") level summaries to pay attention to are the columns -->
+
+<!-- * P.AA (proportion of subjects homozygous for Allele 1) -->
+<!-- * P.AB (proportion of subjects heterozygous) -->
+<!-- * P.BB (proportion of subjects homozygous for Allele 2) -->
+
+<!-- In general, only SNPs that have some level of variability will be informative for analysis. For example, if some subjects have a condition and others don't, but they all have the same genotype for -->
+<!-- a particular SNP, that SNP isn't going to give us any information about that condition or trait. -->
+
+<!-- Only keep polygenic SNPs and those on chr1:22 -->
+<!--   genotypes <- obj$genotypes[, snpStats::col.summary(obj$genotypes)$P.AA != 1 & -->
+<!--                                snpStats::col.summary(obj$genotypes)$P.AB != 1 & -->
+<!--                                snpStats::col.summary(obj$genotypes)$P.BB != 1 & obj$map$chromosome %in% 1:22] -->
+
 
 ## Heterozygosity
 
