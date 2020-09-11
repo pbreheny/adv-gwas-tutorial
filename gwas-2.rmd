@@ -1,0 +1,110 @@
+---
+title: 'GWAS tutorial: Imputation and population structure'
+author: Patrick Breheny and Anna Reisetter
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+```{r knitr_setup, include=FALSE, purl=FALSE}
+library(knitr)
+library(kableExtra)
+set.seed(1)
+knitr::opts_knit$set(aliases=c(h = 'fig.height', w = 'fig.width'))
+knitr::opts_chunk$set(comment="#", message=FALSE, collapse=TRUE, cache=FALSE, tidy=FALSE, fig.align="center")
+knitr::knit_hooks$set(small.mar = function(before, options, envir) {
+  if (before) par(mar = c(4, 4, .1, .1))
+})
+```
+```{r setup, include=FALSE}
+library(data.table)
+library(magrittr)
+```
+
+IN PROGRESS, DON'T GO THROUGH THIS YET
+
+Start by reading in the qc data from earlier step
+
+```{r read}
+library(snpStats)
+obj <- readRDS('data/gwas-qc.rds')
+obj$genotypes
+dim(obj$map)
+cs <- col.summary(obj$genotypes)
+```
+
+# Imputation
+
+A common method of dealing with SNPs with missing data is imputation. This involves replacing missing SNP values with what these values are predicted to be, based on a subjects' surrounding SNP values that are not missing. 
+
+We can first check how many SNPs have any missing data:
+```{r, any-miss}
+table(cs$Call.rate == 1)
+```
+This tells us that 172633 SNPs have no missingness, while 688840 have some level of missingness. We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has many options and things that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where we first determines a set of "tag" SNPS, which will be used to help predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to our genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
+
+```{r, impute}
+# determine tagging SNPs. Note: this can take a few minutes
+rules <- snp.imputation(obj$genotypes, minA=0) 
+
+# apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
+imputed <- impute.snps(rules, obj$genotypes, as.numeric=FALSE)
+
+# how many SNPs still have missing data after imputation?
+cs.imputed <- col.summary(imputed)
+table(cs.imputed$Call.rate == 1)
+```
+Even after imputation, there are still 305651 SNPs with missing data. If a large proportion of these SNPs are missing, we may wish to exclude them.
+
+```{r}
+# how many SNPs cannot be imputed and still have >= 50% missing values?
+table(cs.imputed$Call.rate <= 0.5)
+# these look weird I think because there are non-polygenic snps and maybe nonstandard chr included...
+
+# looking at the map file there are a lot of NA alleles (?)
+# > sum(is.na(obj$map$allele.1))
+# [1] 26154
+# > sum(is.na(obj$map$allele.2))
+# [1] 1
+
+# throw out SNPs that have >= 50% missingness, even after imputation
+# imputed2 <- imputed[, cs.imputed$Call.rate > 0.5]
+
+# impute remaining missing values with HWE expected value (SNP mean)
+# missing <- table(snpStats::col.summary(out2)$Call.rate == 1)
+
+# which SNPs have missingness
+# to_impute <- which(cs.imputed$Call.rate < 1)
+
+# subset to a SnpMatrix with only SNPs with some missingness - we want to loop
+# over these to replace missing values with the mean, but it's a waste of time
+# to loop over the SNPs with no missingness 
+# miss <- imputed[, to_impute]
+
+# this is done in a way where only one SNP at a time is converted to a numeric - otherwise this
+# is computationally too expensive in R
+# imputed_mean <- sapply(1:ncol(miss), function(x){
+#   s <- drop(as(miss[,x], 'numeric'))
+#   if (all(is.na(s))) {
+#     print(x)
+#     return(miss[,x])
+#   } else {
+#     idx <- which(is.na(s)) # look for missing values in a numeric vector
+#     s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP's mean
+#     raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+#   return(raw)
+#   }
+# })
+# 
+# imputed3 <- imputed2
+# imputed3@.Data[, to_impute] <- imputed_mean
+```
+
+# Population structure
+
+## Concept
+
+## PCA
+
+## RRM / Kinship
+
+## Crptic relatedness
+

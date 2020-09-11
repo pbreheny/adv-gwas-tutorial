@@ -1,2 +1,2 @@
-_site/gwas.html: gwas.rmd
-	render -w gwas.rmd
+web:
+	Rscript -e 'html::render_all(list.files(".", "*.rmd"))'

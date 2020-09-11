@@ -1,0 +1,10 @@
+title: "GWAS tutorial"
+left:
+  - text: "Data"
+    href: gwas-1.html
+  - text: "Structure"
+    href: gwas-2.html
+  - text: "Analysis"
+    href: gwas-3.html
+  - text: "PostGWAS"
+    href: gwas-4.html

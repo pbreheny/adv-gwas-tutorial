@@ -1,0 +1,32 @@
+---
+title: 'GWAS tutorial: Imputation and population structure'
+author: Patrick Breheny and Anna Reisetter
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+```{r knitr_setup, include=FALSE, purl=FALSE}
+library(knitr)
+library(kableExtra)
+set.seed(1)
+knitr::opts_knit$set(aliases=c(h = 'fig.height', w = 'fig.width'))
+knitr::opts_chunk$set(comment="#", message=FALSE, collapse=TRUE, cache=FALSE, tidy=FALSE, fig.align="center")
+knitr::knit_hooks$set(small.mar = function(before, options, envir) {
+  if (before) par(mar = c(4, 4, .1, .1))
+})
+```
+```{r setup, include=FALSE}
+library(data.table)
+library(magrittr)
+```
+
+IN PROGRESS, DON'T GO THROUGH THIS YET
+
+Start by reading in the qc data from earlier step
+
+```{r read}
+library(snpStats)
+obj <- readRDS('data/gwas-qc.rds')
+obj$genotypes
+dim(obj$map)
+```
+
