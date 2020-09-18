@@ -1,5 +1,5 @@
 ---
-title: 'GWAS tutorial: Imputation and population structure'
+title: 'GWAS tutorial: Snp testing'
 author: Patrick Breheny and Anna Reisetter
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 ---
@@ -17,16 +17,219 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 ```{r setup, include=FALSE}
 library(data.table)
 library(magrittr)
+library(qqman)
+library(snpStats)
+library(dplyr)
 ```
 
-IN PROGRESS, DON'T GO THROUGH THIS YET
+# Forenote
 
-Start by reading in the qc data from earlier step
+As the rest of the pages, this is a work in progress. Additionally, further work needs to be done before properly proceeding with this step.  Luckily, that part of the pipeline is being built, and the structure of this section will remain largly unchanged. With that said, discussion of the results will need to be updated. If you find that the code outputs do not align with a discussion of the results, this is likely the case, but know change is on the way!
 
+# Adjusted
+
+## Read in data
 ```{r read}
-library(snpStats)
+clinical <- fread("data/GWAStutorial_clinical.csv")
 obj <- readRDS('data/gwas-qc.rds')
+(bim <- fread('data/GWAStutorial.bim'))
 obj$genotypes
 dim(obj$map)
 ```
 
+## GWAS
+
+An important consideration is controlling for stratification in the population alongside other population level factors. A key assumption is that our subjects are independent from one another, but this may not necessarily be the case. Since this page is being built concurrently with the analysis on population structure, we will set that aside for the moment.
+
+```{r association_test}
+assoc_test <- snp.rhs.tests(
+  clinical$CAD ~ clinical$sex + clinical$age, 
+  family   = "binomial",
+  data     = obj$fam,
+  snp.data = obj$genotypes
+)
+
+assoc_p_vals <- p.value(assoc_test)
+```
+
+In  our above model, you'll notice that we use the independent variables sex and to help consider differences due to sex/age since we have them as covariates.
+
+### qqplot
+
+```{r assumption_test}
+qq(assoc_p_vals)
+```
+
+Not too bad, this looks pretty promising. There is a bit of divergence up which is what we'd like to see. What this tells us is that most the p-values follow how we'd expect with a small number being lower than expected. However, with testing we hope this is the case since this signifies significance.
+
+### Manhattan Plot
+
+#### Data Wrangling and Default Plot
+
+```{r manhattan_plot}
+manh_data <- data.frame(
+    SNP = assoc_test@snp.names, 
+    P = assoc_p_vals
+  ) %>%
+  left_join(bim, by = c("SNP" = "V2")) %>%
+  rename(
+    CHR = V1, 
+    BP = V4
+  )
+
+manhattan(manh_data, ylim = c(0, 10))
+```
+
+#### Adding annotations
+
+```{r man_with_annotations}
+manhattan(manh_data, ylim = c(0, 10), annotatePval = .000005)
+```
+
+But maybe we also want to highlight a certain region. In this cases, there seems to be a set of snps around rs9632884. Let's highlight them to practice the final piece of functionality from qqman.
+
+```{r man_with_annotations}
+bp_center <- manh_data %>%
+  filter(SNP == "rs9632884") %>%
+  pull(BP)
+
+bp_range <- c(-1, 1) * 100000 + bp_center
+
+snps_highlight <- manh_data %>%
+  filter(BP >= bp_range[1], BP <= bp_range[2], CHR == 9) %>%
+  pull(SNP)
+
+manhattan(
+  manh_data, 
+  ylim = c(0, 10), 
+  annotatePval = .000005, 
+  highlight = snps_highlight
+)
+```
+
+This is a bit of a hand wavey job, but you get the point.
+
+The goal of manhattan plots are to help identify snps or a region of snps that are associated with a phenotype of interest. The blue and red lines are values for $-log_{10}$ of pvalues at two levels of "significance." When we do have snps with a p-value that exceeds these lines, we are often interested in the one that is the highest in a given region. However, we can also look closer at groups of snps especially if it is the case that the trait is expected to have a complex and wide range of level of inheritance which is known as pleiotropy (i.e. many snps determine level of affectedness).
+
+In our cases, we see several that exceed $-log_{10}(p)$ = 5 or $p = .00005$ and one in particular excceds $-log_{10}(p) \approx$ 7.5. Note, the lines above can be adjusted and are default to the manhattan() function. In practice, we would ideally set significance levels prior or use some correction to avoid bias. In any case, we will carry this forward as we consider if statistical relevance translates into any coherent biological signficance in part 4.
+
+# Unadjusted
+
+## Read in data
+```{r read_uncleaned}
+obj_unc <- read.plink('data/GWAStutorial')
+```
+
+## GWAS
+
+```{r association_test_unc}
+assoc_test_unc <- snp.rhs.tests(
+  clinical$CAD ~ clinical$sex + clinical$age, 
+  family   = "binomial",
+  data     = obj_unc$fam,
+  snp.data = obj_unc$genotypes
+)
+
+assoc_p_vals_unc <- p.value(assoc_test_unc)
+```
+
+It drops some data and throws a warning, but let's see how the plots compare.
+
+### qqplot
+
+```{r assumption_test}
+qq(assoc_p_vals_unc)
+```
+
+Looks pretty similar to with the cleaned data, probably because this dataset was already relativaly clean.
+
+### Manhattan Plot
+
+
+```{r mahnattan_plot}
+manh_data_unc <- data.frame(
+    SNP = assoc_test_unc@snp.names, 
+    P = assoc_p_vals_unc
+  ) %>%
+  left_join(bim, by = c("SNP" = "V2")) %>%
+  rename(
+    CHR = V1, 
+    BP = V4
+  )
+
+manhattan(manh_data_unc, ylim = c(0,10), annotatePval = .000005)
+```
+
+This is interesting. We see the results vary some, but the main bits of significance are nearly the same as with the cleaned data. This is likely due to the fact that by and large the data was pretty clean going into the process. In practice we should not expect this to be the case and should always begin with steps 1 and 2 of pre-processing the data.
+
+# Attempt using plink (1.9)
+
+PLINK is a great tool, but it didn't necessarily like the naming of the original plink object. Thus, below I recreate a plink that it agrees well with. 
+
+```{r plink_creation}
+write.plink(
+  file.base = "data/qc_data",
+  snps = obj$genotypes,
+  pedigree = obj$fam$pedigree,
+  id = obj$fam$member,
+  father = obj$fam$father,
+  mother = obj$fam$mother,
+  sex = clinical$sex,
+  phenotype = clinical$CAD + 1,
+  chromosome = obj$map$chromosome,
+  genetic.distance = obj$map$cM,
+  position = obj$map$position,
+  allele.1 = obj$map$allele.1,
+  allele.2 = obj$map$allele.2
+)
+```
+
+
+The next step is also to create a covariate table.
+
+```{r covariate_creation}
+covar <- data.frame(
+  FID = obj$fam$pedigree,
+  IID = obj$fam$pedigree,
+  sex = clinical$sex,
+  age = clinical$age
+)
+head(covar)
+write.table(
+  covar,
+  file = "data/covar.txt",
+  row.names = FALSE,
+  quote = FALSE
+)
+```
+
+Then comes running the commands for plink. The first thing we have to do is have it take the plink data and make a new binary fileset. The reasons for which I am not entirely familiar, but it solved the error of ".bim file has a split chromosome" so I'll take it! Finally, we are able to then run and read the results into R. 
+
+```{r plink}
+cd <- getwd()
+system(paste("cd", cd))
+system("inst/plink/plink --make-bed -bfile data/qc_data --out data/qc_data_remedy")
+system("inst/plink/plink --bfile data/qc_data_remedy --logistic --adjust --out inst/plink/assoc_results")
+## --covar data/covar.txt
+adj_res <- fread("inst/plink/assoc_results.assoc.logistic")
+adj_res <- na.omit(adj_res)
+```
+
+```{r plink_plots}
+qq(adj_res$P)
+
+manh_data_plink <- 
+  data.frame(
+    SNP = adj_res$SNP, 
+    P = adj_res$P
+  ) %>%
+  left_join(bim, by = c("SNP" = "V2")) %>%
+  rename(
+    CHR = V1, 
+    BP = V4
+  )
+
+manhattan(manh_data_plink, ylim = c(0,10), annotatePval = .000005)
+```
+
+Here we have a slight difference, likely due to the exclusion of covariates for the pure fact that I have been unable to overcome an error and have spent far too much time trying to trouble shoot already. The battle is to be continued... 
