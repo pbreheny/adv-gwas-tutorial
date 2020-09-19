@@ -88,7 +88,7 @@ manhattan(manh_data, ylim = c(0, 10), annotatePval = .000005)
 
 But maybe we also want to highlight a certain region. In this cases, there seems to be a set of snps around rs9632884. Let's highlight them to practice the final piece of functionality from qqman.
 
-```{r man_with_annotations}
+```{r man_with_highlighting}
 bp_center <- manh_data %>%
   filter(SNP == "rs9632884") %>%
   pull(BP)
@@ -122,7 +122,7 @@ obj_unc <- read.plink('data/GWAStutorial')
 
 ## GWAS
 
-```{r association_test_unc}
+```{r association_test_unc, message = FALSE, warning = FALSE}
 assoc_test_unc <- snp.rhs.tests(
   clinical$CAD ~ clinical$sex + clinical$age, 
   family   = "binomial",
@@ -137,7 +137,7 @@ It drops some data and throws a warning, but let's see how the plots compare.
 
 ### qqplot
 
-```{r assumption_test}
+```{r assumption_test_unc}
 qq(assoc_p_vals_unc)
 ```
 
@@ -166,7 +166,7 @@ This is interesting. We see the results vary some, but the main bits of signific
 
 PLINK is a great tool, but it didn't necessarily like the naming of the original plink object. Thus, below I recreate a plink that it agrees well with. 
 
-```{r plink_creation}
+```{r plink_creation, message = FALSE}
 write.plink(
   file.base = "data/qc_data",
   snps = obj$genotypes,
@@ -205,12 +205,11 @@ write.table(
 
 Then comes running the commands for plink. The first thing we have to do is have it take the plink data and make a new binary fileset. The reasons for which I am not entirely familiar, but it solved the error of ".bim file has a split chromosome" so I'll take it! Finally, we are able to then run and read the results into R. 
 
-```{r plink}
+```{r plink, message = FALSE}
 cd <- getwd()
 system(paste("cd", cd))
 system("inst/plink/plink --make-bed -bfile data/qc_data --out data/qc_data_remedy")
 system("inst/plink/plink --bfile data/qc_data_remedy --logistic --adjust --out inst/plink/assoc_results")
-## --covar data/covar.txt
 adj_res <- fread("inst/plink/assoc_results.assoc.logistic")
 adj_res <- na.omit(adj_res)
 ```
@@ -232,4 +231,4 @@ manh_data_plink <-
 manhattan(manh_data_plink, ylim = c(0,10), annotatePval = .000005)
 ```
 
-Here we have a slight difference, likely due to the exclusion of covariates for the pure fact that I have been unable to overcome an error and have spent far too much time trying to trouble shoot already. The battle is to be continued... 
+Here we have a slight difference, likely due to the exclusion of covariates for the pure fact that I have been unable to overcome an error and have spent far too much time trying to trouble shoot already. The battle is to be continued.
