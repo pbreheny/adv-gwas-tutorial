@@ -5,3 +5,5 @@
 .Ruserdata
 data/
 _R
+inst/
+_site/
