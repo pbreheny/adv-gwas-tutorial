@@ -1,0 +1,35 @@
+---
+title: 'GWAS tutorial'
+author: Patrick Breheny
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+```{r knitr_setup, include=FALSE, purl=FALSE}
+library(knitr)
+library(kableExtra)
+set.seed(1)
+knitr::opts_knit$set(aliases=c(h = 'fig.height', w = 'fig.width'))
+knitr::opts_chunk$set(comment="#", message=FALSE, collapse=TRUE, cache=FALSE, tidy=FALSE, fig.align="center")
+knitr::knit_hooks$set(small.mar = function(before, options, envir) {
+  if (before) par(mar = c(4, 4, .1, .1))
+})
+```
+
+# ANNOVAR
+
+<https://doc-openbio.readthedocs.io/projects/annovar/en/latest>
+
+# MAGMA
+
+<https://ctg.cncr.nl/software/magma>
+
+The brower-based version of MAGMA is called FUMA:
+
+<https://ctg.cncr.nl/software/fuma_gwas>
+
+MAGMA is relatively easy to use (especially in browser version), but what is it actually doing behind the scenes?  Here are two papers:
+
+* [MAGMA: Generalized gene-set analysis of GWAS data (2015)](https://doi.org/10.1371/journal.pcbi.1004219)
+* [The statistical properties of gene-set analysis (2016)](https://doi.org/10.1038/nrg.2016.29)
+
+The first is the original MAGMA publication, but I would actually recommend reading the second one instead (or at least, first).  Both articles are written by the same primary group of authors; the second provides a better overview of the field, potential approaches, what MAGMA does differently than competing approaches, and why what MAGMA does is better.
