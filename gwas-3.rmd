@@ -208,9 +208,9 @@ Then comes running the commands for plink. The first thing we have to do is have
 ```{r plink, message = FALSE}
 cd <- getwd()
 system(paste("cd", cd))
-system("inst/plink/plink --make-bed -bfile data/qc_data --out data/qc_data_remedy")
-system("inst/plink/plink --bfile data/qc_data_remedy --logistic --adjust --out inst/plink/assoc_results")
-adj_res <- fread("inst/plink/assoc_results.assoc.logistic")
+system("plink --make-bed -bfile data/qc_data --out data/qc_data_remedy")
+system("plink --bfile data/qc_data_remedy --logistic --adjust --out data/assoc_results")
+adj_res <- fread("data/assoc_results.assoc.logistic")
 adj_res <- na.omit(adj_res)
 ```
 
