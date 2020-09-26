@@ -14,12 +14,18 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
   if (before) par(mar = c(4, 4, .1, .1))
 })
 ```
+
 ```{r setup, include=FALSE}
 library(data.table)
 library(magrittr)
-```
 
-IN PROGRESS, DON'T GO THROUGH THIS YET
+ggbox <- function (X, xlab = "ind", ylab = "values") {
+    if (!is.data.frame(X)) X <- as.data.frame(X)
+    ggplot2::ggplot(utils::stack(X), ggplot2::aes_string("ind", 
+        "values")) + ggplot2::geom_boxplot() + ggplot2::xlab(xlab) + 
+        ggplot2::ylab(ylab)
+}
+```
 
 Start by reading in the qc data from earlier step
 
@@ -39,7 +45,7 @@ We can first check how many SNPs have any missing data:
 ```{r, any-miss}
 table(cs$Call.rate == 1)
 ```
-This tells us that 172633 SNPs have no missingness, while 688840 have some level of missingness. We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has many options and things that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where we first determines a set of "tag" SNPS, which will be used to help predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to our genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
+This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness, while `r table(cs$Call.rate == 1)['FALSE']` have some level of missingness. We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has many options and things that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where we first determines a set of "tag" SNPS, which will be used to help predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to our genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
 
 ```{r, impute}
 # determine tagging SNPs. Note: this can take a few minutes
@@ -52,51 +58,100 @@ imputed <- impute.snps(rules, obj$genotypes, as.numeric=FALSE)
 cs.imputed <- col.summary(imputed)
 table(cs.imputed$Call.rate == 1)
 ```
-Even after imputation, there are still 305651 SNPs with missing data. If a large proportion of these SNPs are missing, we may wish to exclude them.
+Even after imputation, there are still `r table(cs.imputed$Call.rate == 1)['FALSE']` SNPs with missing data. If these SNPs have a high proportion of missingness, we may wish to simply exclude them. What qualifies as 'high' depends on a number of factors. For now we will say greater than 50\% is high.
+
 
 ```{r}
 # how many SNPs cannot be imputed and still have >= 50% missing values?
 table(cs.imputed$Call.rate <= 0.5)
-# these look weird I think because there are non-polygenic snps and maybe nonstandard chr included...
 
-# looking at the map file there are a lot of NA alleles (?)
-# > sum(is.na(obj$map$allele.1))
-# [1] 26154
-# > sum(is.na(obj$map$allele.2))
-# [1] 1
+ggbox(cs.imputed$Call.rate)
+```
+We can see that none of the imputed SNPs have level of missingness greater than 50\%, but there are still SNPs with missingness, even after imputation. A not-very-fancy, but reasonable thing to do for these values is to replace them with their HWE expected value (i.e. the mean value of that SNP). 
 
-# throw out SNPs that have >= 50% missingness, even after imputation
-# imputed2 <- imputed[, cs.imputed$Call.rate > 0.5]
+There are a number of ways to code this, but with `snpStats` it will require us to convert data from the `snpStats` `SnpMatrix` format to numeric and back. Generally, the entire `SnpMatrix` object will be too large for `R` to handle as a numeric object, so I will do this one SNP at a time in a loop. I'm also going to have the loop only run over the SNPs with missingness, so we don't waste time reading in SNPs that don't need any additional imputation.
 
+```{r}
 # impute remaining missing values with HWE expected value (SNP mean)
-# missing <- table(snpStats::col.summary(out2)$Call.rate == 1)
+(missing <- table(cs.imputed$Call.rate == 1)) # can use this to verify things are being subset appropriately, dimensions match, etc.
 
-# which SNPs have missingness
-# to_impute <- which(cs.imputed$Call.rate < 1)
+# identify which SNPs have missingness
+to_impute <- which(cs.imputed$Call.rate < 1)
+length(to_impute)
 
-# subset to a SnpMatrix with only SNPs with some missingness - we want to loop
+# subset to a SnpMatrix object with only SNPs with some missingness - we want to loop
 # over these to replace missing values with the mean, but it's a waste of time
 # to loop over the SNPs with no missingness 
-# miss <- imputed[, to_impute]
+miss <- imputed[, to_impute]
+dim(miss)
 
 # this is done in a way where only one SNP at a time is converted to a numeric - otherwise this
 # is computationally too expensive in R
-# imputed_mean <- sapply(1:ncol(miss), function(x){
-#   s <- drop(as(miss[,x], 'numeric'))
-#   if (all(is.na(s))) {
-#     print(x)
-#     return(miss[,x])
-#   } else {
-#     idx <- which(is.na(s)) # look for missing values in a numeric vector
-#     s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP's mean
-#     raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
-#   return(raw)
-#   }
-# })
-# 
-# imputed3 <- imputed2
-# imputed3@.Data[, to_impute] <- imputed_mean
+imputed_mean <- sapply(1:ncol(miss), function(x){
+  s <- drop(as(miss[,x], 'numeric'))
+  if (all(is.na(s))) {
+    print(x)
+    return(miss[,x])
+  } else {
+    idx <- which(is.na(s)) # look for missing values in a numeric vector
+    s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
+    raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+  return(raw)
+  }
+})
+dim(imputed_mean)
+
+imputed2 <- imputed # create a copy of the entire imputed SnpMatrix, including missingness
+imputed2@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
+
+Now we have a genotype object with no missingness. Since we didn't exclude any of the SNPs, we don't need to re-subset our map object. But, lets double check that we in fact have no missing values and that our labels match, in case something weird happened that didn't throw an error. When working with large genetic data sets it is easier for something like that to occur and go unnoticed, so double checking our preprocessing is almost always worthwhile.
+
+Again, because of the size of our `SnpMatrix` object, this isn't as simple as `sum(is.na(imputed2))`, and the following would throw an error.
+
+```{r}
+# sum(is.na(imputed2))
+```
+
+So, we'll check missingness in chunks that `R` can handle.
+```{r}
+# make sure there are no missing values remaining / count missing values
+missing <- 0
+chunks <- ceiling(nrow(imputed2) / 100) # I'm breaking this up using 100 based on on trial and error but this can be tweaked.
+start <- 1
+for (i in 1:chunks){
+  stop <- min(i*100, nrow(imputed2))
+  missing <- missing + sum(is.na(imputed2[start:stop,]))
+  start <- stop + 1
+}
+missing # should be 0!
+```
+Now we'll replace our `obj$genotypes` with the imputed version, and make sure the `map` and `fam` objects are appropriately subset and ordered.
+```{r}
+obj$genotypes <- imputed2
+obj$map <- obj$map[colnames(obj$genotypes),]
+stopifnot(all.equal(colnames(obj$genotypes), as.character(obj$map$snp.name)))
+obj$fam <- obj$fam[rownames(obj$genotypes),]
+stopifnot(all.equal(rownames(obj$genotypes), as.character(obj$fam$pedigree)))
+```
+
+Let's save this imputed data set for future use in downstream analyses:
+
+```{r save}
+saveRDS(obj, 'data/gwas-imp.rds')
+```
+
+# Imputation (advanced)
+
+A more complex method of imputation involves the use of reference genome panels in addition to the observed data itself. The basic idea is to use known haplotypes, or groups of alleles inherited together, from reference genomes to give us better estimates of unobserved genotypes. These reference panels typically come from the 1000 Genomes or HapMap projects, which are large-scale international organizations that aim to develop a haplotype maps of the human genome in diverse populations. 
+
+* [IGSR: The International Genome Sample Resource](https://www.internationalgenome.org/home)
+* [International HapMap Project](https://www.genome.gov/10001688/international-hapmap-project)
+
+In addition to allowing us to estimate untyped SNPs as we did above, where our SNPs of interest were typed in our population of interest but we had call rates of less than 1, this method of imputation can also allow us to estimate SNPs that were not genotyped on a particular population at all. This can be useful for combining multiple genetic data sets where different SNPs were typed, or for evaluating associations in distinct genetic populations. 
+
+It's important to be aware that this type of imputation is possible, and commonly done. However, since it involves its own large array of software and expertise, it is probably something you would want to consult with an expert on. 
+
 
 # Population structure
 
@@ -106,5 +161,5 @@ table(cs.imputed$Call.rate <= 0.5)
 
 ## RRM / Kinship
 
-## Crptic relatedness
+## Cyptic relatedness
 
