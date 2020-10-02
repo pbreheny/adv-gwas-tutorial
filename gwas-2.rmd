@@ -41,39 +41,40 @@ cs <- col.summary(obj$genotypes)
 
 A common method of dealing with SNPs with missing data is imputation. This involves replacing missing SNP values with what these values are predicted to be, based on a subjects' surrounding SNP values that are not missing. 
 
-We can first check how many SNPs have any missing data:
+Recall that in the QC step, of our analysis, we excluded SNPs with \ge 90\% missingness. However, there may still be SNPs with some missingness. We will first check how many SNPs in our qc'd data set have some missing data:
 ```{r, any-miss}
 table(cs$Call.rate == 1)
 ```
-This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness, while `r table(cs$Call.rate == 1)['FALSE']` have some level of missingness. We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has many options and things that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where we first determines a set of "tag" SNPS, which will be used to help predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to our genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
+This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness, but `r table(cs$Call.rate == 1)['FALSE']` still have some missingness (albeit less than 10\%.) We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has numerous options that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where it first determines a set of "tag" SNPS, which are used to predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to the supplied genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
 
 ```{r, impute}
 # determine tagging SNPs. Note: this can take a few minutes
 rules <- snp.imputation(obj$genotypes, minA=0) 
 
 # apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
+# NB: these imputed values will likely not be integers, so we will have to do  
+# some subsequent rounding if we want to convert them back to their .bed format
 imputed <- impute.snps(rules, obj$genotypes, as.numeric=FALSE)
 
 # how many SNPs still have missing data after imputation?
 cs.imputed <- col.summary(imputed)
 table(cs.imputed$Call.rate == 1)
 ```
-Even after imputation, there are still `r table(cs.imputed$Call.rate == 1)['FALSE']` SNPs with missing data. If these SNPs have a high proportion of missingness, we may wish to simply exclude them. What qualifies as 'high' depends on a number of factors. For now we will say greater than 50\% is high.
+So, we went from `r table(cs$Call.rate == 1)['TRUE']` SNPs with no missingness to `r table(cs.imputed$Call.rate == 1)['TRUE']` after imputation. However, there are still `r table(cs.imputed$Call.rate == 1)['FALSE']` SNPs with missing data. 
+
+We can look at the $R^2$ values to check the imputation quality. This vignette has additional information about accessing the $R^2 values and evaluating imputation quality with `snpstats`:
+
+* [Imputation Vignette](https://www.bioconductor.org/packages/release/bioc/vignettes/snpStats/inst/doc/imputation-vignette.pdf)
 
 
-```{r}
-# how many SNPs cannot be imputed and still have >= 50% missing values?
-table(cs.imputed$Call.rate <= 0.5)
+Often we want our data set to have no missing values. Many statistical methods we may want to apply to these data which cannot handle any missingness. Rather than simply excluding these SNPs, one not-very-fancy, but reasonable thing to do for these values is to replace them with their HWE expected value (i.e. the average of that SNP). 
 
-ggbox(cs.imputed$Call.rate)
-```
-We can see that none of the imputed SNPs have level of missingness greater than 50\%, but there are still SNPs with missingness, even after imputation. A not-very-fancy, but reasonable thing to do for these values is to replace them with their HWE expected value (i.e. the mean value of that SNP). 
+There are a number of ways to code this, but with `snpStats` it will require us to convert data from the `snpStats` `SnpMatrix` format to numeric and back. Generally, the entire `SnpMatrix` object will be too large for `R` to read into memory, so I will do this one SNP at a time in a loop. 
 
-There are a number of ways to code this, but with `snpStats` it will require us to convert data from the `snpStats` `SnpMatrix` format to numeric and back. Generally, the entire `SnpMatrix` object will be too large for `R` to handle as a numeric object, so I will do this one SNP at a time in a loop. I'm also going to have the loop only run over the SNPs with missingness, so we don't waste time reading in SNPs that don't need any additional imputation.
+We can impute the mean or mode (i.e. 0, 1, or 2) of these SNPs. The mode will allow us to convert the imputed data back to PLINK file formats, but if that's our objective, we'll also have to check all of our `snpStats` imputed values and round them where necessary, which can take a while. If we don't need to interact with PLINK or PLINK-related R packages, we can leave non-integer genotype values as they are, and simply impute the remaining values using the mean. This will allow us to only work on the SNPs that have remaining missingness and will be faster, so that's what I'm going to do.
 
-```{r}
-# impute remaining missing values with HWE expected value (SNP mean)
-(missing <- table(cs.imputed$Call.rate == 1)) # can use this to verify things are being subset appropriately, dimensions match, etc.
+```{r, impute_mean}
+(missing <- table(cs.imputed$Call.rate == 1)) # use this to verify things are being subset appropriately, dimensions match, etc.
 
 # identify which SNPs have missingness
 to_impute <- which(cs.imputed$Call.rate < 1)
@@ -81,7 +82,7 @@ length(to_impute)
 
 # subset to a SnpMatrix object with only SNPs with some missingness - we want to loop
 # over these to replace missing values with the mean, but it's a waste of time
-# to loop over the SNPs with no missingness 
+# to loop over the SNPs with no missingness so I'm subsetting
 miss <- imputed[, to_impute]
 dim(miss)
 
@@ -89,31 +90,67 @@ dim(miss)
 # is computationally too expensive in R
 imputed_mean <- sapply(1:ncol(miss), function(x){
   s <- drop(as(miss[,x], 'numeric'))
-  if (all(is.na(s))) {
-    print(x)
-    return(miss[,x])
-  } else {
-    idx <- which(is.na(s)) # look for missing values in a numeric vector
-    s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
-    raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+  idx <- which(is.na(s)) # identify missing values in a numeric vector
+  s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
+  raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
   return(raw)
-  }
 })
-dim(imputed_mean)
+dim(imputed_mean) 
 
-imputed2 <- imputed # create a copy of the entire imputed SnpMatrix, including missingness
+imputed2 <- imputed # I'm making a copy of the imputed data with residual missingness so I can compare the snpstats imputed data with the fully imputed data
 imputed2@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
 
-Now we have a genotype object with no missingness. Since we didn't exclude any of the SNPs, we don't need to re-subset our map object. But, lets double check that we in fact have no missing values and that our labels match, in case something weird happened that didn't throw an error. When working with large genetic data sets it is easier for something like that to occur and go unnoticed, so double checking our preprocessing is almost always worthwhile.
+Below is code to impute using the mode, and to check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if your data isn't very big, or if using the PLINK formats is of interest. The overall structure is similar to the mean-imputation code above, but with some key differences. We will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also  need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as above.
+```{r, impute_mode, eval = FALSE}
+# R doesn't have a built in `mode` function so we'll have to write our own
+mode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# this takes ~ 45 min
+start <- Sys.time()
+imputed_mode <- sapply(1:ncol(imputed), function(x){
+  s <- drop(as(imputed[,x], 'numeric'))
+  idx <- which(is.na(s)) # look for missing values in a numeric vector
+  if (length(idx) > 0) s[idx] <- mode(s) # replace missing values with that SNP mode
+  s1 <- snpStats::mean2g(s) %>%
+    snpStats::g2post() # s1 contains the posterior probabilities of the possible genotypes
+  to_round <- apply(s1, 1, function(z) length((z[z > 0] > 1))) 
+  idx2 <- which(to_round > 1)
+  s1[idx2,] <- t(apply(t(s1[idx2,, drop = FALSE]), 2, function(y) list(c(1, 0, 0),
+                                                                       c(0, 1, 0),
+                                                                       c(0, 0, 1))[[which.max(y)]])) # impute using the genotype with the highest posterior probability
+  raw <- snpStats::mean2g(s1) # convert the numeric SNP vector back to its raw, memory friendly form
+  return(raw)
+})
+stop <- Sys.time()
+stop - start
+dim(imputed_mode)
+
+imputed3 <- as(imputed_mode, 'raw') # convert to raw
+
+# we need to do another check for monomorphic snps with this type of imputation
+cs.imputed3 <- col.summary(imputed2)
+table(cs.imputed3$MAF == 0) # some of these have been imputed such that they are now monomorphic! re-subset...
+```
+
+Now back to our mean-imputed object, `imputed2`. We have a genotype object with no missingness. Lets double check that we in fact have no missing values and that our labels match, in case something weird happened that didn't throw an error. When working with large genetic data sets it is easier for something like that to occur and go unnoticed, so double checking our preprocessing is almost always worthwhile.
 
 Again, because of the size of our `SnpMatrix` object, this isn't as simple as `sum(is.na(imputed2))`, and the following would throw an error.
 
 ```{r}
 # sum(is.na(imputed2))
 ```
+But, we can do this using the `snpStats` `col.summary()` function
+```{r}
+cs.imputed2 <- snpStats::col.summary(imputed2)
+table(cs.imputed2$Call.rate)
+```
 
-So, we'll check missingness in chunks that `R` can handle.
+
+Or, we can check missingness using base `R` functions in multiple chunks `R` can handle. The `col.summary()` method is easier and faster, but this method is more broadly applicable.
 ```{r}
 # make sure there are no missing values remaining / count missing values
 missing <- 0
@@ -126,7 +163,7 @@ for (i in 1:chunks){
 }
 missing # should be 0!
 ```
-Now we'll replace our `obj$genotypes` with the imputed version, and make sure the `map` and `fam` objects are appropriately subset and ordered.
+Now we'll replace our `obj$genotypes` with the fully-imputed version, and make sure the `map` and `fam` objects are appropriately subset and ordered.
 ```{r}
 obj$genotypes <- imputed2
 obj$map <- obj$map[colnames(obj$genotypes),]
@@ -136,7 +173,6 @@ stopifnot(all.equal(rownames(obj$genotypes), as.character(obj$fam$pedigree)))
 ```
 
 Let's save this imputed data set for future use in downstream analyses:
-
 ```{r save}
 saveRDS(obj, 'data/gwas-imp.rds')
 ```
@@ -150,16 +186,50 @@ A more complex method of imputation involves the use of reference genome panels 
 
 In addition to allowing us to estimate untyped SNPs as we did above, where our SNPs of interest were typed in our population of interest but we had call rates of less than 1, this method of imputation can also allow us to estimate SNPs that were not genotyped on a particular population at all. This can be useful for combining multiple genetic data sets where different SNPs were typed, or for evaluating associations in distinct genetic populations. 
 
-It's important to be aware that this type of imputation is possible, and commonly done. However, since it involves its own large array of software and expertise, it is probably something you would want to consult with an expert on. 
+It's important to be aware that this type of imputation is possible, and commonly done. However, since it involves its own large array of software and expertise, it is probably something you would want to consult with an expert on. The Michigan Imputation Server is a service that will do more complex imputation for you. It also contains information about the various reference panels, their versions, etc. 
+
+* [Michigan Imputation Server](https://imputationserver.sph.umich.edu/index.html#!)
 
 
 # Population structure
 
 ## Concept
 
+Population structure is defined by the existence of allele frequency differences that characterize sub-populations and is driven by the combined effects of evolutionary processes such as genetic drift, migration, demographic history, and natural selection.
+
+Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification*. Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*.
+
+Population structure is a common phenomenon in genetic data. Varying levels of relatedness are almost always present among genetic samples, even in samples of unrelated individuals and seemingly homogeneous populations. For example, European American, Han Chinese, and recently, cohorts within the UK Biobank data have been shown to exhibit patterns of population and geographic structure despite their seemingly similar subjects.
+
+Population stratification in particular has been of great concern in genetic studies due to its potential to lead to spurious associations when population structure is associated with differences in both allele frequency and the trait or disease.
+
+As an example, consider a GWAS to assess genetic variants associated with lung cancer in a sample comprised of subjects from two distinct subpopulations, A and B. Assume the minor allele of SNP X is present with higher frequency in subpopulation A compared to subpopulation B, but has no direct effect on lung cancer. Also suppose these subpopulations are geographically segregated in a such a way that subpopulation A is exposed to good air quality, and subpopulation B to poor air quality, and that air quality has a direct effect on lung cancer. A GWAS of data from these subpopulations would find SNP X to be significantly associated with lung cancer, even though we know it has no effect on lung cancer. If subpopulations A and B were not subject to different air qualities, all else being equal, SNP X would not be found to be associated with the phenotype.
+
+Another apocryphal but illustrative example of how population stratification can lead to confounding in genetic studies is linked below.
+
+* [Beware the chopsticks gene](https://www.nature.com/articles/4000662)
+
+In addition, GWAS (and many statistical tests) assume samples are independent. Cryptic relatedness and population structure can invalidate these tests since the presence of non-independent samples, and thus non-independent errors, can lead to inflated test statistics. 
+
+Because of this, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
+ 
+```{r, include=FALSE}
+obj <- readRDS('data/gwas-imp.rds')
+```
+ 
+
 ## PCA
+
+IN PROGRESS BELOW HERE
 
 ## RRM / Kinship
 
 ## Cyptic relatedness
+
+Calculate RRM, look for people with kinship coefficient that is greater than some threshold, remove them.
+
+KING
+PCA-Air
+
+NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.
 
