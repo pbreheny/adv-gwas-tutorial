@@ -2,6 +2,7 @@
 title: 'GWAS tutorial: Imputation and population structure'
 author: Patrick Breheny and Anna Reisetter
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
+extra_dependencies: ["centernot"]
 ---
 
 ```{r knitr_setup, include=FALSE, purl=FALSE}
@@ -21,6 +22,7 @@ Start by reading in the qc data from earlier step
 library(snpStats)
 library(SNPRelate)
 library(data.table)
+library(magrittr)
 obj <- readRDS('data/gwas-qc.rds')
 obj$genotypes
 dim(obj$map)
@@ -212,17 +214,60 @@ obj <- readRDS('data/gwas-imp.rds')
 
 One of the simplest and most common methods used to assess and correct for population structure in our data is with PCA. Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. Mathematically, this entails using the eigenvectors of the sample covariance matrix, $\frac{1}{n}\bf{X}^T\bf{X}$ (assuming the columns of $\bf{X}$ are centered), or in the case of population structure, since we are interested in variation across samples rather than features, $\frac{1}{p}\bf{X}\bf{X}^T$. ... also more mathematical details that I will include ... eventually.
 
-If we construct and plot some of the top PCs of our data, we should see clustering that corresponds to known, or unknown, population structure. Our data will require special tools for PCA because of its size. We could manually compute the pcs, but would probably 
-need to run it on the cluster with a lot of memory, and it  would take a long time.  
+Our data will require special tools for PCA because of its size. We'll get there, but to start, I'm going to illustrate some of these concepts using some smaller data with known structure. First, w'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
+```{r, process_admixture}
+Data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt")
+Data[1:5, 1:5]
+Race <- Data$Race
+XX <- as.matrix(Data[,-1]) # create an all SNP mat
+polymorphic <- apply(XX, 2, sd) != 0
+X <- XX[,polymorphic] # filter out monomorphic SNPs
+dim(X)
+# [1] 197  98
+table(Race)
+```
+Next, I'm going to compute the pcs and plot a scree plot. This tells us the proportion of variance explained by each of the pcs. PCA is such that the pcs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many pcs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional pcs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 pcs are simply used in practice. 
+```{r, plot_admixture}
+pca <- prcomp(X, center = TRUE, scale = TRUE)
+pca$x[1:5, 1:5]
+# I'm only plotting the top 10 pcs
+plot(1:10, pca$sdev[1:10]^2, type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC', main = 'Scree Plot')
 
-We'll be using tools from the package `SNPRelate` which allow us to do key computations quickly. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate`
-has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, but as 
-far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS. So, we need 
-to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file:
+```
+We see this elbow point at 3 pcs, which makes sense, given that there are 4 distinct races in this data set (we lose one df when we center our data).
 
-$$\text{SnpMatrix} \longrightarrow \text{bed/bim/fam} \longrightarrow \text{GDS}$$
+Now we'll plot the first two pcs against each other, and color the data points by the known race of each subject. We expect to see clustering that corresponds to population structure. 
+```{r}
+gdat <- data.frame(Race = Race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
+library(ggplot2)
+g <- ggplot(gdat, aes(x = PC1, y = PC2, col = Race)) +
+  geom_point() +
+  coord_fixed()
+plot(g)
+```
+Indeed, we see that the first two pcs differentiate the racial groups, which cluster together. We can see that PC1 seems to differentiate the European/Japanese populations from the African/African American ones, while PC2 seems to primarily differentiate the European and Japanese populations. Even if we did not have the known race vector to color the points, we could still pick out some clustering from this plot, which indicates underlying structure. If there were no underlying structure in our data, we would expect to see no clustering or systematic pattern in this plot. 
 
-There is code for this in gwas-3, but I'll include it here for completeness. I'll read in the clinical data, and re-load the qc-data because we replaced the original copy with the imputed version.
+As a counter example to this plot, we can plot the pcs from a random matrix:
+```{r}
+# I'm going to use the same dimensions as those in the admixture data.
+n <- 197
+p <- 98
+XX <- matrix(rnorm(n * p), n, p)
+pca2 <- prcomp(XX, center = TRUE, scale = TRUE)
+gdat2 <- data.frame(PC1 = pca2$x[,1], PC2 = pca2$x[, 2])
+g <- ggplot(gdat2, aes(x = PC1, y = PC2)) +
+  geom_point() +
+  coord_fixed()
+plot(g)
+```
+No underlying structure = no clustering / pattern.
+
+
+Back to our data set of interest. We use the same process to compute the pcs, but would probably 
+need to do so on a cluster with a lot of memory, and it even then it would take a long time. Instead, we'll be using tools from the package `SNPRelate` which allow us to do key computations quickly. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\centernot\longrightarrow$. So, we need 
+to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
+
+There is code for this in gwas-3, but I'll include it here for completeness. I'll read in the clinical data, and re-load the qc-data because we replaced the original copy (`obj`) with the imputed version.
 ```{r}
 clinical <- fread('data/GWAStutorial_clinical.csv')
 imputed <- readRDS('data/gwas-qc.rds')
@@ -244,13 +289,10 @@ write.plink(
 ```
 
 If we wanted to spend the time using the mode imputation and rounding to get a qc-data
-set with absolutely no missingness, we could do
-$$\text{bed/bim/fam} \longrightarrow \text{SnpMatrix} \longrightarrow \text{bed/bim/fam} \longrightarrow \text{GDS}$$
-Yes, this is annoying.
+set with absolutely no missingness, we could do bed/bim/fam/ $\longrightarrow$ `SnpMatrix` bed/bim/fam/ $\longrightarrow$ GDS. This is annoying.
 
-Back to our qc-d plink data. We will now create our GDS file, use `SNPRelate` to
-compute the PCs, and plot them to see if it looks like there is any kind of sample
-structure.
+We will now create our GDS file, use `SNPRelate` to compute the PCs, and plot them to see if it looks like there is any kind of sample
+structure as we saw in the previous example. We don't have a known race or subpopulation status vector to color this plot, but we can look for clustering.
 ```{r}
 # create gds file so we can use SNPRelate - using unimputed qc data
 qc_data.fn <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
@@ -261,12 +303,15 @@ genofile <- snpgdsOpen(qc_data.fn$gds)
 
 # get pcs
 pca <- snpgdsPCA(genofile)
-plot(1:10, pca$varprop[1:10], type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC')
 
 # close the file
 snpgdsClose(genofile)
 
-# put top 10 pcs in a table - 10 is somewhat arbitrary but based on the scree plot seems reasonable
+# plot
+plot(1:10, pca$varprop[1:10], type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC')
+
+
+# put top 10 pcs in a table 
 pctab <- data.frame(sample.id = pca$sample.id,
                     pca$eigenvect[, 1:10],
                     stringsAsFactors = FALSE)
@@ -280,10 +325,11 @@ There is definitely some clustering in our data that is likely attributable to p
 structure and/or relatedness. One way we can account for this clustering is by including the
 top PCs as covariates in modeling or testing.  
 
+Depending on the number of relevant pcs we adjust for, PCA can account for finer structure than the handfuls of large subpopulations we have seen so far. However, if we wanted to use PCA to adjust for finer population structure like family structure or cryptic relatedness, we would need to include a *lot* more pcs. Depending on our sample size, this may not be possible or how we want to spend our df. 
 
-IN PROGRESS BELOW HERE
+## Kinship / GRM / RRM 
 
-## GRM / RRM / Kinship
+Kinship has a colloquial interpretation that goes along with familial relatedness - people are 'kin' who are in the same family. In genetics, a more formal definition of kinship is a measure of relatedness. Formally, the probability that an allele selected randomly from an individual, $i$, and an allele selected at the same autosomal locus from another individual, $j$, are identical and from the same ancestor.
 
 ## Cyptic relatedness
 
@@ -313,30 +359,5 @@ NB: definitions of the terms `recent` and `ancient` are somewhat subjective and 
 
 
 
-<!-- We'll get there, but to start, I'm going to illustrate the concept using some smaller data with known structure. -->
-
-<!-- First, read in the data and filter out the monomorphic SNPs. Note that this data set contains a known race variable. -->
-<!-- ```{r, process_admixture} -->
-<!-- Data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt") -->
-<!-- Data[1:5, 1:5] -->
-<!-- Race <- Data$Race -->
-<!-- XX <- as.matrix(Data[,-1]) # create an all SNP mat -->
-<!-- polymorphic <- apply(XX, 2, sd) != 0  -->
-<!-- X <- XX[,polymorphic] # filter out monomorphic SNPs -->
-<!-- dim(X) -->
-<!-- # [1] 197  98 -->
-<!-- table(Race) -->
-<!-- ``` -->
-
-<!-- ```{r, plot_admixture} -->
-<!-- pca <- prcomp(X, center = TRUE, scale = TRUE) -->
-<!-- gdat <- data.frame(Race = Race, PC1 = pca$x[,1], PC2 = pca$x[, 2]) -->
-<!-- library(ggplot2) -->
-<!-- g <- ggplot(gdat, aes(x = PC1, y = PC2, col = Race)) + -->
-<!--   geom_point() +  -->
-<!--   coord_fixed() -->
-<!-- plot(g) -->
-<!-- ``` -->
-<!-- We can see that PC1 seems to differentiate  -->
 
 
