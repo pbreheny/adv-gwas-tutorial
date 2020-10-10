@@ -1,0 +1,10 @@
+.Rproj.user
+*.Rproj
+.Rhistory
+.RData
+.Ruserdata
+data/
+_R
+inst/
+_site/
+plink.exe
