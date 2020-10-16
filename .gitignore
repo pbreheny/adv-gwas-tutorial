@@ -8,3 +8,5 @@ _R
 inst/
 _site/
 plink.exe
+magma
+annovar
