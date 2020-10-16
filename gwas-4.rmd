@@ -1,6 +1,6 @@
 ---
 title: 'GWAS tutorial'
-author: Patrick Breheny
+author: Patrick Breheny and Logan Harris
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 ---
 
@@ -17,7 +17,64 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 
 # ANNOVAR
 
-<https://doc-openbio.readthedocs.io/projects/annovar/en/latest>
+## Steps Using WSL
+
+1. If you are on a windows machine, download [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and follow the steps to get set up.
+2. Convert input file to proper format for conversion (it should just be a text file of snps):
+
+```{r}
+head(read.table('data/snp_list.txt', col.names = c("SNPS")))
+```
+
+3. Get Annotations
+
+```{r}
+sys <- Sys.info()[["sysname"]]
+
+if (sys == "Windows") {
+
+  system('bash -c "perl annovar/annotate_variation.pl -downdb -buildver hg19 -webfrom annovar snp138 annovar/humandb"')
+  
+} else {
+  
+  system("perl annovar/annotate_variation.pl -downdb -buildver hg19 -webfrom annovar snp138 annovar/humandb")
+  
+}
+```
+
+4. Build Annotation file
+
+```{r}
+if (sys = "Windows") {
+  
+ system('bash -c "perl annovar/convert2annovar.pl -format rsid data/snp_list.txt -dbsnpfile annovar/humandb/hg19_snp138.txt > data/snplist"') 
+  
+} else {
+  
+  system("perl annovar/convert2annovar.pl -format rsid data/snp_list.txt -dbsnpfile annovar/humandb/hg19_snp138.txt > data/snplist")
+  
+}
+```
+
+5. Annotate File
+
+```{r}
+if (sys = "windows") {
+
+  system(
+    'bash -c "perl annovar/table_annovar.pl data/snplist annovar/humandb/ -buildver hg19 -out data/anno2 -remove -protocol refGene,cytoBand,exac03,avsnp147,dbnsfp30a -operation gx,r,f,f,f -nastring . -csvout -polish -xref annovar/example/gene_xref.txt"',
+    intern = TRUE
+  )
+  
+} else {
+  
+  system(
+  "perl annovar/table_annovar.pl data/snplist annovar/humandb/ -buildver hg19 -out data/anno2 -remove -protocol refGene,cytoBand,exac03,avsnp147,dbnsfp30a -operation gx,r,f,f,f -nastring . -csvout -polish -xref annovar/example/gene_xref.txt",
+  intern = TRUE
+  )
+  
+}
+```
 
 # MAGMA
 
@@ -33,3 +90,61 @@ MAGMA is relatively easy to use (especially in browser version), but what is it 
 * [The statistical properties of gene-set analysis (2016)](https://doi.org/10.1038/nrg.2016.29)
 
 The first is the original MAGMA publication, but I would actually recommend reading the second one instead (or at least, first).  Both articles are written by the same primary group of authors; the second provides a better overview of the field, potential approaches, what MAGMA does differently than competing approaches, and why what MAGMA does is better.
+
+## Steps to Use MAGMA
+
+Before beginning, we need to create the snp text file as shown on the SNP level testing page with the following code:
+
+```{r, eval = FALSE}
+## Table to be used with FUMA/MAGMA
+snp_fuma <- data.frame(
+  SNP = assoc_test@snp.names,
+  P = p.value(assoc_test),
+  N = assoc_test@N
+  ) %>%
+  dplyr::left_join(bim[,c(1:2, 4)], by = c("SNP" = "V2")) %>%
+  dplyr::rename(CHR = V1, POS = V4) %>%
+  dplyr::select(SNP, CHR, POS, P, N)
+
+write.table(
+  snp_fuma,
+  file = "data/snp_fuma.txt",
+  row.names = FALSE,
+  col.names = TRUE,
+  quote = FALSE
+)
+```
+
+
+To annotate the snps to associate them with given genes we can run:
+
+```{r}
+system(
+  "magma/magma --annotate --snp-loc data/snp_fuma.txt --gene-loc magma/NCBI38.gene.loc --out data/snp_anno",
+  intern = TRUE
+)
+```
+
+To then get gene level significance levels we can run: 
+
+```{r}
+system(
+  "magma/magma --bfile magma/g1000_eur --pval data/snp_fuma.txt ncol=N --gene-annot data/snp_anno.genes.annot --out data/gene_level",
+  intern = TRUE
+)
+```
+
+```{r}
+res <- fread("data/gene_level.genes.out.txt")
+
+res[which.min(res$P)]
+
+write.table(
+  unique(res$GENE),
+  "data/genes_of_interest.txt",
+  quote = FALSE,
+  col.names = FALSE,
+  row.names = FALSE
+)
+```
+
