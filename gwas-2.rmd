@@ -31,7 +31,12 @@ cs <- col.summary(obj$genotypes)
 
 # Imputation
 
-A common method of dealing with SNPs with missing data is imputation. This involves replacing missing SNP values with what these values are predicted to be, based on a subjects' surrounding SNP values that are not missing. 
+A common method of dealing with SNPs with missing data is imputation. There are two main reasons that one would use imputation:
+
+1. To replace missing SNP values with what these values are predicted to be, based on a person's surrounding SNP values that are not missing. 
+2. To infer values for SNPs that were not measured at all. This would be the case if one was to merge data from studies that examined different loci. 
+
+For the purposes of this tutorial, let us limit ourselves to scenario (1). 
 
 Recall that in the QC step, of our analysis, we excluded SNPs with \ge 90\% missingness. However, there may still be SNPs with some missingness. We will first check how many SNPs in our qc'd data set have some missing data:
 ```{r, any-miss}
@@ -41,12 +46,12 @@ This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness
 
 ```{r, impute}
 # determine tagging SNPs. Note: this can take a few minutes
-rules <- snp.imputation(obj$genotypes, minA=0) 
+rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 
 # apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
 # NB: these imputed values will likely not be integers, so we will have to do  
 # some subsequent rounding if we want to convert them back to their .bed format
-imputed <- impute.snps(rules, obj$genotypes, as.numeric=FALSE)
+imputed <- snpStats::impute.snps(rules, obj$genotypes, as.numeric=FALSE)
 
 # how many SNPs still have missing data after imputation?
 cs.imputed <- col.summary(imputed)
