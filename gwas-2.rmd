@@ -31,6 +31,8 @@ cs <- col.summary(obj$genotypes)
 
 # Imputation
 
+Trivial edit...
+
 A common method of dealing with SNPs with missing data is imputation. This involves replacing missing SNP values with what these values are predicted to be, based on a subjects' surrounding SNP values that are not missing. 
 
 Recall that in the QC step, of our analysis, we excluded SNPs with \ge 90\% missingness. However, there may still be SNPs with some missingness. We will first check how many SNPs in our qc'd data set have some missing data:
