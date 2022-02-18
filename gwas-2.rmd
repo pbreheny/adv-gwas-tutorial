@@ -1,6 +1,6 @@
 ---
 title: 'GWAS tutorial: Imputation and population structure'
-author: Patrick Breheny and Anna Reisetter
+author: Patrick Breheny, Anna Reisetter, and Tabitha Peter
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 extra_dependencies: ["centernot"]
 ---
@@ -16,7 +16,7 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
-Start by reading in the qc data from earlier step
+To begin, read in the **qc** data from earlier step (refer back to the "Data" page of the tutorial). 
 
 ```{r read}
 library(snpStats)
@@ -31,24 +31,36 @@ cs <- col.summary(obj$genotypes)
 
 # Imputation
 
-A common method of dealing with SNPs with missing data is imputation. There are two main reasons that one would use imputation:
+In a genetics research context, most  observations (*e.g* patients or subjects) will have missing values for at least one SNP. A common method of dealing with missing SNP data is imputation. 
 
-1. To replace missing SNP values with what these values are predicted to be, based on a person's surrounding SNP values that are not missing. 
-2. To infer values for SNPs that were not measured at all. This would be the case if one was to merge data from studies that examined different loci. 
+There are two main reasons that one would use imputation:
+
+1. To replace missing SNP values with what these values are predicted to be, based upon a person's (or subject's) available SNP values near the loci of interest. For instance, suppose that in a given data set, patient A is missing SNP 123. This value for patient A could be imputed based on the patient's other SNP values at loci near 123. 
+
+2. To infer values for SNPs that were not measured at all for any patients (subjects). This would be the case if one was to merge data from studies that examined different loci. For instance, suppose I am merging data from studies A and B. Suppose further that study A measured SNP 123 for all patients, but study B did not. In the merged data, I may need to impute values for SNP 123 for all patients in the study B data. 
 
 For the purposes of this tutorial, let us limit ourselves to scenario (1). 
 
-Recall that in the QC step, of our analysis, we excluded SNPs with \ge 90\% missingness. However, there may still be SNPs with some missingness. We will first check how many SNPs in our qc'd data set have some missing data:
+Recall that in the QC step of our analysis, we excluded SNPs with \ge 90\% missingness. However, there may still be SNPs with some missingness. SNPs that are not missing are described as "called." The **call rate** is the proportion of genotypes that are called (see `snpStats::col.summary()` documentation for details). Therefore, a call rate of 1 indicates that a SNP has no missing values.
+
+By examining the call rate information, we will first check how many SNPs in our qc'd data set have some missing data:
+
 ```{r, any-miss}
 table(cs$Call.rate == 1)
 ```
-This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness, but `r table(cs$Call.rate == 1)['FALSE']` still have some missingness (albeit less than 10\%.) We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has numerous options that can be tweaked. We will perform a basic imputation for now, but see its documentation for more details. `snpStats` uses a two step imputation procedure where it first determines a set of "tag" SNPS, which are used to predict the missing SNP values. These "tag" SNPs are then used to generate prediction rules for the missing SNPs. Then, these prediction rules are applied to the supplied genotype matrix and missing SNP values are imputed. It is possible for the rules to not yield a predictions for SNPs with insufficient data or tagging SNPs as we'll see.
+
+ This tells us that `r table(cs$Call.rate == 1)['TRUE']` SNPs have no missingness, but `r table(cs$Call.rate == 1)['FALSE']` still have some missingness (albeit less than 10\%.) We will try to impute values for these SNPs using the `snp.imputation()` function from `snpStats`. `snp.imputation()` has numerous options that can be tweaked according to the needs of a specific problem. We will perform a basic imputation for now; see the R documentation for more details.
+ 
+ The package `snpStats` uses a two step imputation procedure. First, the function determines a set of "tag" SNPS. These tag SNPs are used to predict the missing SNP values and to generate prediction rules for the missing SNPs. Second, these prediction rules are applied to the supplied genotype matrix where missing SNP values are imputed. 
+ 
+**N.B** In the case where there is insufficient data or a lack of tagging SNPs, it is possible for the generated prediction rules to fail at yielding predictions. We will see an example of this later in the tutorial. 
 
 ```{r, impute}
 # determine tagging SNPs. Note: this can take a few minutes
 rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 
 # apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
+
 # NB: these imputed values will likely not be integers, so we will have to do  
 # some subsequent rounding if we want to convert them back to their .bed format
 imputed <- snpStats::impute.snps(rules, obj$genotypes, as.numeric=FALSE)
@@ -57,7 +69,8 @@ imputed <- snpStats::impute.snps(rules, obj$genotypes, as.numeric=FALSE)
 cs.imputed <- col.summary(imputed)
 table(cs.imputed$Call.rate == 1)
 ```
-So, we went from `r table(cs$Call.rate == 1)['TRUE']` SNPs with no missingness to `r table(cs.imputed$Call.rate == 1)['TRUE']` after imputation. However, there are still `r table(cs.imputed$Call.rate == 1)['FALSE']` SNPs with missing data. 
+
+In the procedure coded above, we went from `r table(cs$Call.rate == 1)['TRUE']` SNPs with no missingness to `r table(cs.imputed$Call.rate == 1)['TRUE']` after imputation. However, there are still `r table(cs.imputed$Call.rate == 1)['FALSE']` SNPs with missing data. 
 
 We can look at the $R^2$ values to check the imputation quality. This vignette has additional information about accessing the $R^2 values and evaluating imputation quality with `snpstats`:
 
@@ -98,7 +111,11 @@ imputed2 <- imputed # I'm making a copy of the imputed data with residual missin
 imputed2@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
 
-Below is code to impute using the mode, and to check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if your data isn't very big, or if using the PLINK formats is of interest. The overall structure is similar to the mean-imputation code above, but with some key differences. We will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also  need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as above.
+Below is code that imputes using the mode. I also check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if:
+1) your data isn't very big, or 2) if using the PLINK formats is of interest. 
+
+Although the overall structure is similar to the mean-imputation code above, there are some key differences. Here, we will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as I did in the previous code.
+
 ```{r, impute_mode, eval = FALSE}
 # R doesn't have a built in `mode` function so we'll have to write our own
 mode <- function(v) {
