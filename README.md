@@ -15,7 +15,7 @@ The rendered files will appear in `_site`.
 Alternatively, you can clone the pre-rendered pages using
 
 ```
-git clone --branch gh-pages github:pbreheny/adv-gwas-tutorial.git _site
+git clone --branch gh-pages https://github.com/pbreheny/adv-gwas-tutorial.git _site
 ```
 
 And then build an individual page with
