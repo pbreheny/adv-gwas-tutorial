@@ -41,15 +41,19 @@ dim(obj$map)
 
 ## GWAS
 
-An important consideration is controlling for stratification in the population alongside other population level factors. A key assumption is that our subjects are independent from one another, but this may not necessarily be the case. Since this page is being built concurrently with the analysis on population structure, we will set that aside for the moment.
+Within the context of a GWAS study, a key assumption is that the patients are independent from one another. However, this assumption is not always met. There could be subgroups within the population which contribute to differences in allele frequencies between individuals. The presence of differences in allele frequencies due to systematic dissimilarities in ancestry is called **stratification**. Stratification violates the assumption of independence, and so an important consideration for a GWAS study is controlling for stratification alongside other population level factors. 
+
+Since this page is being built concurrently with the analysis on population structure, we will set that aside for the moment. Later, we will return to the concept of examining the data for evidence of stratification. 
+
+We begin our analysis with a logistic regression model which uses the predictors sex and age to study the binary outcome CAD. With the function `snp.rhs.tests()`, we will perform a large set of logistic regression tests and save the p-values in a vector called "assoc_p_vals"
 
 ```{r association_test, message = FALSE, warning = FALSE}
-assoc_test <- snp.rhs.tests(
+assoc_test <- snpStats::snp.rhs.tests(
   clinical$CAD ~ clinical$sex + clinical$age, 
   family   = "binomial",
   data     = obj$fam,
-  snp.data = obj$genotypes,
-  rules = rules
+  snp.data = obj$genotypes
+  # rules = rules
   )
 
 assoc_p_vals <- p.value(assoc_test)
@@ -83,23 +87,29 @@ write.table(
 )
 ```
 
-In  our above model, you'll notice that we use the independent variables sex and to help consider differences due to sex/age since we have them as covariates.
-
 ### qqplot
 
+As a first look at our results, we will examine a qq-plot. This plot compares the observed p-values from our SNP tests with the p-values we would expect if there were no associations. To make our qq-plot, we will use the package `qqman`. 
+
 ```{r assumption_test}
-qq(assoc_p_vals_pre)
+qqman::qq(assoc_p_vals_pre)
 ```
 
-Not too bad, this looks pretty promising. There is a bit of divergence up which is what we'd like to see. What this tells us is that most the p-values follow how we'd expect with a small number being lower than expected. However, with testing we hope this is the case since this signifies significance.
+If the observed p-values follow exactly the distribution we would expect under the global null hypothesis, then all points will be plotted on the red line. 
+
+We notice in this qq-plot that some of the p-values (plotted as points) diverge from the red line to the left. This indicates that some observed values are below what is expected. From a statistical point of view, this is pretty promising. Having some p-values that are smaller than expected indicates that there are likely to be significant results in the data. 
 
 ### Manhattan Plot
 
 #### Data Wrangling and Default Plot
 
+Another plot which is commonly used to examine significance of genes in specific regions is a **Manhattan plot**. After formatting our data to have readable labels, I create a Manhattan plot using the `manhattan()` function (also from the `qqman` package). 
+
+
 - need to compare to pre imputation
 
 ```{r manhattan_plot}
+# format data to have readable labels. 
 manh_data <- data.frame(
     SNP = assoc_test@snp.names, 
     P = assoc_p_vals
@@ -127,16 +137,21 @@ manh_data %>% filter(P < .00000005)
 manh_data_pre %>% filter(P < .00000005)
 ```
 
+Here, the x-axix of the plot is divided into "bins", where each bin represents a chromosome. The y axix shows the negative, log-transformed p-values. Each of the p-values from our analysis is plotted in the bin corresponding to the chromosome of the gene in that particular test, and the height of the point directly correlates with the significance of the test.
+
+The goal of Manhattan plots are to help identify SNPs (or a region of SNPs) that are associated with a phenotype of interest. The blue and red lines are values for $-log_{10}$ of p-values at two levels of "significance." When we do have SNPs with a p-value that exceeds these lines, we are often interested in the one that is the highest in a given region. However, we can also look closer at groups of SNPs, especially if it is the case that the trait is expected to have a complex and wide ranging levels of inheritance. The presence of such a complex trait is known as **pleiotropy** (*i.e.* many SNPs determine level of affectedness).
+
 #### Adding annotations
 
 ```{r man_with_annotations}
 manhattan(manh_data, ylim = c(0, 10), annotatePval = .000005)
 ```
 
-But maybe we also want to highlight a certain region. In this cases, there seems to be a set of snps around rs9632884. Let's highlight them to practice the final piece of functionality from qqman.
+
+Based on the Manhattan plots, a region of interest could be around rs9632884 on Chromosome 9. If I wanted to highlight a region of interest, I could do this to highlight the specific genes in this region, or **locus**. This will also allow us to practice the final piece of functionality from `qqman`:
 
 ```{r man_with_highlighting}
-bp_center <- manh_data %>%
+bp_center <- manh_data %>% # NB: 'bp' stands for 'base pair'
   filter(SNP == "rs9632884") %>%
   pull(BP)
 
@@ -154,13 +169,15 @@ manhattan(
 )
 ```
 
-This is a bit of a hand wavey job, but you get the point.
+The above may be a bit of an oversimplification, yet it still stands to demonstrate the basic concept of Manhattan plots and how to create them. 
 
-The goal of manhattan plots are to help identify snps or a region of snps that are associated with a phenotype of interest. The blue and red lines are values for $-log_{10}$ of pvalues at two levels of "significance." When we do have snps with a p-value that exceeds these lines, we are often interested in the one that is the highest in a given region. However, we can also look closer at groups of snps especially if it is the case that the trait is expected to have a complex and wide range of level of inheritance which is known as pleiotropy (i.e. many snps determine level of affectedness).
+In the present cases represented in the Manhattan plot of our data, we see several that exceed $-log_{10}(p)$ = 5 (or $p \leq .00005$) and one in particular exceeds $-log_{10}(p) \approx$ 7.5. (Note that the lines above can be adjusted and are default to the `manhattan()` function.) 
 
-In our cases, we see several that exceed $-log_{10}(p)$ = 5 or $p = .00005$ and one in particular excceds $-log_{10}(p) \approx$ 7.5. Note, the lines above can be adjusted and are default to the manhattan() function. In practice, we would ideally set significance levels prior or use some correction to avoid bias. In any case, we will carry this forward as we consider if statistical relevance translates into any coherent biological signficance in part 4.
+In practice, we would ideally set significance levels prior to analysis or use some correction to avoid bias. For the sake of demonstration, we will carry the present analysis forward as we consider if statistical relevance translates into any coherent biological significance (sees part 4).
 
-# Unadjusted
+# For futher reading (optional)
+
+Out of curiosity, I want to examine what happens if we do NOT adjust using imputation: 
 
 ## Read in data
 ```{r read_uncleaned}
