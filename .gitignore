@@ -6,7 +6,7 @@
 data/
 _R
 inst/
-_site/
 plink.exe
 magma
 annovar
+!_site
