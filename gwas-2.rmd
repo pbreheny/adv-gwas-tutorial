@@ -45,7 +45,7 @@ Recall that in the QC step of our analysis, we excluded SNPs with \ge 90\% missi
 
 By examining the call rate information, we will first check how many SNPs in our qc'd data set have some missing data:
 
-```{r, any-miss}
+```{r, any-missing}
 table(cs$Call.rate == 1)
 ```
 
@@ -292,9 +292,11 @@ pca$x[1:5, 1:5]
 plot(1:10, pca$sdev[1:10]^2, type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC', main = 'Scree Plot')
 
 ```
+
 We see this elbow point at 3 pcs, which makes sense, given that there are 4 distinct races in this data set (we lose one df when we center our data).
 
 Now we'll plot the first two pcs against each other, and color the data points by the known race of each subject. We expect to see clustering that corresponds to population structure. 
+
 ```{r}
 gdat <- data.frame(Race = Race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
 library(ggplot2)
