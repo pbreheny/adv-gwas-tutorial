@@ -30,7 +30,7 @@ library(dplyr)
 # Adjusted
 
 ## Read in data
-```{r read}
+```{r read, eval=FALSE}
 clinical <- fread("data/GWAStutorial_clinical.csv")
 obj <- readRDS('data/gwas-imp.rds')
 obj_pre <- readRDS('data/gwas-qc.rds')
@@ -52,8 +52,8 @@ assoc_test <- snpStats::snp.rhs.tests(
   clinical$CAD ~ clinical$sex + clinical$age, 
   family   = "binomial",
   data     = obj$fam,
-  snp.data = obj$genotypes
-  # rules = rules
+  snp.data = obj$genotypes,
+  rules = rules
   )
 
 assoc_p_vals <- p.value(assoc_test)
