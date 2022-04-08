@@ -1,6 +1,6 @@
 ---
 title: 'GWAS tutorial: An Introduction'
-author: Patrick Breheny and Anna Reisetter
+author: Patrick Breheny, Anna Reisetter, Logan Harris, and Tabitha Peter
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output:
   html_document:
@@ -21,6 +21,8 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 # Welcome!
 
 This tutorial is a continuing work in progress, but we are excited you are using this resource to get started with Genome Wide Association Studies.
+
+This tutorial was inspired by similar work in [Reed2015](https://dx.doi.org/10.1002/sim.6605) and [Marees2017](https://onlinelibrary.wiley.com/doi/abs/10.1002/mpr.1608). Unfortunately, the software used in the 2015 tutorial is a bit out of date now -- several R packages have changed or are no longer available -- and it needed an update.
 
 This tutorial is broken down into four sections: 1) Data formats, summary statistics and quality control, 2) Imputation and population structure, 3) SNP Testing, and 4) Post analysis and biological relevance.
 
