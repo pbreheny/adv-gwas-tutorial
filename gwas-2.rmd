@@ -60,7 +60,6 @@ table(cs$Call.rate == 1)
 rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 
 # apply the prediction rules to missing SNPs and output an imputed SnpMatrix object
-
 # NB: these imputed values will likely not be integers, so we will have to do  
 # some subsequent rounding if we want to convert them back to their .bed format
 imputed <- snpStats::impute.snps(rules, obj$genotypes, as.numeric=FALSE)
