@@ -300,11 +300,18 @@ It's important to be aware that this type of imputation is possible, and commonl
 
 ## Concept
 
+In a GWAS context, *population structure* is a kind of relatedness among the individuals represented in the data set. When considering relatedness, it is helpful to define the phrase **identical by descent**. Two alleles from the same locus are identical by descent if they can be traced back from the same allele in an earlier generation. For more information on this concept, check out [this example](https://pbgworks.org/sites/pbgworks.org/files/KinshipMatrixFinal.pdf). 
+
+
 Population structure is defined by the existence of allele frequency differences that characterize sub-populations and is driven by the combined effects of evolutionary processes such as genetic drift, migration, demographic history, and natural selection.
 
-Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification*. Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*.
-
 Population structure is a common phenomenon in genetic data. Varying levels of relatedness are almost always present among genetic samples, even in samples of unrelated individuals and seemingly homogeneous populations. For example, European American, Han Chinese, and recently, cohorts within the UK Biobank data have been shown to exhibit patterns of population and geographic structure despite their seemingly similar subjects.
+
+Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification* (or *ancestry differences*). Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*. ^[NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.]
+
+
+
+### Population stratification 
 
 Population stratification in particular has been of great concern in genetic studies due to its potential to lead to spurious associations when population structure is associated with differences in both allele frequency and the trait or disease.
 
@@ -314,20 +321,54 @@ Another apocryphal but illustrative example of how population stratification can
 
 * [Beware the chopsticks gene](https://www.nature.com/articles/4000662)
 
-In addition, GWAS (and many statistical tests) assume samples are independent. Cryptic relatedness and population structure can invalidate these tests since the presence of non-independent samples, and thus non-independent errors, can lead to inflated test statistics. 
 
-Because of this, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
+### Cryptic relatedness 
+
+An example of cryptic relatedness would be an instance where, unbeknownst to the researcher(s), some of the individuals in a study are first cousins. 
+
+### Tools/implementation 
+
+GWAS (and many statistical tests) assume samples are independent. Cryptic relatedness and population structure can invalidate these tests since the presence of non-independent samples, and thus non-independent errors, can lead to inflated test statistics. 
+
+With this in mind, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
  
+ 
+
+
 ```{r, include=FALSE}
 obj <- readRDS('data/gwas-imp.rds')
 ```
  
 
-## PCA
+#### PCA example 
 
-One of the simplest and most common methods used to assess and correct for population structure in our data is with PCA. Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. Mathematically, this entails using the eigenvectors of the sample covariance matrix, $\frac{1}{n}\bf{X}^T\bf{X}$ (assuming the columns of $\bf{X}$ are centered), or in the case of population structure, since we are interested in variation across samples rather than features, $\frac{1}{p}\bf{X}\bf{X}^T$. ... also more mathematical details that I will include ... eventually.
+One of the simplest and most common methods used to assess and correct for population structure in our data is with PCA. Here, I will present a 'crash course' on the concepts of PCA and give an example with our data.
 
-Our data will require special tools for PCA because of its size. We'll get there, but to start, I'm going to illustrate some of these concepts using some smaller data with known structure. First, w'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
+  Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. PCA creates linear combinations of a given set of variables; this lets the user represent a lot of correlated variables with a smaller number of uncorrelated variables - so PCA gives us **dimension reduction**, which is really helpful for high dimensional settings like GWAS data.
+  
+  Connections to different conceptual frameworks:
+
+  - From a linear modeling framework, PCA is an orthogonal linear transformation of a data set.
+
+  - From a machine learning framework, PCA is a type of unsupervised learning. 
+  
+  A typical PCA includes the following steps: 
+
+  1. Standardize (center and scale) the data.  
+  
+  2. Calculate the covariance matrix $\textbf{S} = \tilde{X}^T \tilde{X}$, where $\tilde{X}$ is our centered and scaled design matrix from step (1). 
+  
+  3. Find the eigenvectors and eigenvalues of $\textbf{S}$
+  
+  4. Calculate the inner products of the columns of $\tilde{X}$ and the associated eigenvectors - these inner products are the **principal components**, whereas the eigenvector coefficients are the **principal component loadings**
+  
+  5. Determine a number of principal components to keep, and create a feature vector with only these components
+  
+  6. Plot the feature vector along the principal component axes (as opposed to the axes of the original data space) - these plots can reveal clusters/population structures within the data 
+
+  
+Our data will require special tools for PCA because of its size. We'll get there, but to start, I'm going to illustrate some of these concepts using some smaller data with known structure. First, we'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
+
 ```{r, process_admixture}
 Data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt")
 Data[1:5, 1:5]
@@ -339,7 +380,8 @@ dim(X)
 # [1] 197  98
 table(Race)
 ```
-Next, I'm going to compute the pcs and plot a scree plot. This tells us the proportion of variance explained by each of the pcs. PCA is such that the pcs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many pcs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional pcs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 pcs are simply used in practice. 
+
+Next, I'm going to compute the principal components (pcs) and plot a scree plot. This tells us the proportion of variance explained by each of the pcs. PCA is such that the pcs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many pcs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional pcs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 pcs are simply used in practice. 
 ```{r, plot_admixture}
 pca <- prcomp(X, center = TRUE, scale = TRUE)
 pca$x[1:5, 1:5]
@@ -385,7 +427,8 @@ Back to our data set of interest. We use the same process to compute the pcs, bu
 need to do so on a cluster with a lot of memory, and it even then it would take a long time. Instead, we'll be using tools from the package `SNPRelate` which allow us to do key computations quickly. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\centernot\longrightarrow$. So, we need 
 to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
 
-There is code for this in gwas-3, but I'll include it here for completeness. I'll read in the clinical data, and re-load the qc-data because we replaced the original copy (`obj`) with the imputed version.
+There is code for this in the next module (see `gwas-3.R`), but I'll include it here for completeness. I'll read in the clinical data, and re-load the qc-data because we replaced the original copy (`obj`) with the imputed version.
+
 ```{r}
 clinical <- fread('data/GWAStutorial_clinical.csv')
 imputed <- readRDS('data/gwas-qc.rds')
@@ -446,11 +489,13 @@ top PCs as covariates in modeling or testing.
 
 Depending on the number of relevant pcs we adjust for, PCA can account for finer structure than the handfuls of large subpopulations we have seen so far. However, if we wanted to use PCA to adjust for finer population structure like family structure or cryptic relatedness, we would need to include a *lot* more pcs. Depending on our sample size, this may not be possible or how we want to spend our df. 
 
-## Kinship / GRM / RRM 
+#### Kinship / GRM / RRM 
 
 Kinship has a colloquial interpretation that goes along with familial relatedness - people are 'kin' who are in the same family. In genetics, a more formal definition of kinship is a measure of relatedness. Formally, the probability that an allele selected randomly from an individual, $i$, and an allele selected at the same autosomal locus from another individual, $j$, are identical and from the same ancestor.
 
-## Cyptic relatedness
+One way to measure relatedness between individuals in a GWAS context is via a measure called a **kinship coefficient** . The kinship coefficient is a probability that quantifies how likely it is that two alleles at same locus, each taken from different people, will be identical by descent. A *kinship matrix* has kinship coefficients as its elements.
+
+##### Cyptic relatedness
 
 ```{r}
 # open the file
@@ -473,10 +518,16 @@ Calculate RRM/GRM, look for people with kinship coefficient that is greater than
 KING
 PCA-Air
 
-NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.
 
+#### Example of a LMM 
 
+- show how this can be done in R
+- need to read up on Anna's penalizedLMM package 
 
+## Further reading 
+
+ - [This other tutorial](https://smcclatchy.github.io/mapping/)
+ - [Another PCA tutorial with snpStats](https://www.bioconductor.org/packages/devel/bioc/vignettes/snpStats/inst/doc/pca-vignette.pdf)
 
 
 
