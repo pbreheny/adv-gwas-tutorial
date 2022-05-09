@@ -16,22 +16,59 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
+## Before you begin...
+
+### Motivating questions 
+
+1. What assumptions does a GWAS make about a population? 
+
+2. What happens when these assumptions are not met? 
+
+3. How can we make adjustments to our models to accommodate complex data that do not meet our classical assumptions? 
+
+
+### Objectives of this module 
+
+When you have completed this module, you will know: 
+
+1. ... how to summarize the assumptions (biological and statistical) that a GWAS makes about the individuals in a study and the structure of the data. 
+
+2. ... how to identify instances when your data show evidence of **not** meeting these assumptions. 
+
+3. ... what tools are available for analyzing complex data that do not meet the basic GWAS assumptions. 
+
+4. ... how to implement the tools mentioned above using `R`
+
+## Set up 
+
 To begin, read in the **qc** data from earlier step (refer back to the "Data" page of the tutorial). 
 
 ```{r read}
+# Load our packages  (same ones mentioned in the data module)
 library(snpStats)
 library(SNPRelate)
 library(data.table)
-library(magrittr)
+library(tidyverse)
+
+# For later in the tutorial, we will need clinical information 
+clinical <- fread('data/GWAStutorial_clinical.csv')
+
+
+## Register cores for parallel processing - very helpful if you're on a laptop
+library(doSNOW)
+registerDoSNOW(makeCluster(4))
+
+# Read in data object created in previous module 
 obj <- readRDS('data/gwas-qc.rds')
 obj$genotypes
+# double check dimensions 
 dim(obj$map)
-cs <- col.summary(obj$genotypes)
+cs <- col.summary(obj$genotypes) # hold onto this --- will need it later 
 ```
 
 # Imputation
 
-In a genetics research context, most  observations (*e.g* patients or subjects) will have missing values for at least one SNP. A common method of dealing with missing SNP data is imputation. 
+In a genetics research context, most observations (*e.g* patients or subjects) will have missing values for at least one SNP. A common method of dealing with missing SNP data is imputation. 
 
 There are two main reasons that one would use imputation:
 
