@@ -3,6 +3,8 @@ title: 'GWAS tutorial: Imputation and population structure'
 author: Patrick Breheny, Anna Reisetter, and Tabitha Peter
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 extra_dependencies: ["centernot"]
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r knitr_setup, include=FALSE, purl=FALSE}
@@ -49,10 +51,6 @@ library(snpStats)
 library(SNPRelate)
 library(data.table)
 library(tidyverse)
-
-# For later in the tutorial, we will need clinical information 
-clinical <- fread('data/GWAStutorial_clinical.csv')
-
 
 ## Register cores for parallel processing - very helpful if you're on a laptop
 library(doSNOW)
@@ -145,7 +143,7 @@ Notice that even after going through the imputation process, there are still `r 
  Let's see how many SNPs in our example data have $ \leq 50 \%$ missingness. 
  
 
-```{r lots_missings}
+```{r missings}
 # how many of the SNPs with some missingness are missing for <= 50% of observations? 
 table(cs.imputed$Call.rate <= 0.5)
 ```
@@ -161,7 +159,7 @@ A couple of notes about this approach:
 
 #### Mean and Mode imputation 
 
-We can look at the $R^2$ values to check the imputation quality. This vignette has additional information about accessing the $R^2 values and evaluating imputation quality with `snpstats`:
+We can look at the $R^2$ values to check the imputation quality. This vignette has additional information about accessing the $R^2$ values and evaluating imputation quality with `snpstats`:
 
 * [Imputation Vignette](https://www.bioconductor.org/packages/release/bioc/vignettes/snpStats/inst/doc/imputation-vignette.pdf)
 
@@ -181,7 +179,7 @@ length(to_impute)
 
 # subset to a SnpMatrix object with only SNPs with some missingness - we want to loop
 # over these to replace missing values with the mean, but it's a waste of time
-# to loop over the SNPs with no missingness so I'm subsetting
+# to loop over the SNPs with no missingness so I'm subsetting to be efficient 
 miss <- imputed[, to_impute]
 dim(miss)
 
@@ -194,6 +192,7 @@ imputed_mean <- sapply(1:ncol(miss), function(x){
   raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
   return(raw)
 })
+# check 
 dim(imputed_mean) 
 
 imputed2 <- imputed # I'm making a copy of the imputed data with residual missingness so I can compare the snpstats imputed data with the fully imputed data
@@ -240,8 +239,9 @@ Now back to our mean-imputed object, `imputed2`. We have a genotype object with 
 
 Again, because of the size of our `SnpMatrix` object, this isn't as simple as `sum(is.na(imputed2))`, and the following would throw an error.
 
-```{r}
-# sum(is.na(imputed2))
+```{r example_err, eval=FALSE}
+# THIS WILL THROW AN ERROR 
+sum(is.na(imputed2))
 ```
 
 But, we can do this using the `snpStats` `col.summary()` function
@@ -249,6 +249,7 @@ But, we can do this using the `snpStats` `col.summary()` function
 ```{r}
 cs.imputed2 <- snpStats::col.summary(imputed2)
 table(cs.imputed2$Call.rate)
+# notice that now, all SNPs are called - yay! 
 ```
 
 
@@ -278,7 +279,7 @@ stopifnot(all.equal(rownames(obj$genotypes), as.character(obj$fam$pedigree)))
 ```
 
 Let's save this imputed data set for future use in downstream analyses:
-```{r save}
+```{r save_imp}
 saveRDS(obj, 'data/gwas-imp.rds')
 ```
 
@@ -307,7 +308,7 @@ Population structure is defined by the existence of allele frequency differences
 
 Population structure is a common phenomenon in genetic data. Varying levels of relatedness are almost always present among genetic samples, even in samples of unrelated individuals and seemingly homogeneous populations. For example, European American, Han Chinese, and recently, cohorts within the UK Biobank data have been shown to exhibit patterns of population and geographic structure despite their seemingly similar subjects.
 
-Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification* (or *ancestry differences*). Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*. ^[NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.]
+Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification* (a.k.a *ancestry differences*). Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*. ^[NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.]
 
 
 
@@ -458,13 +459,16 @@ structure as we saw in the previous example. We don't have a known race or subpo
 ```{r}
 # create gds file so we can use SNPRelate - using unimputed qc data
 qc_data.fn <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
+
 snpgdsBED2GDS(qc_data.fn$bed, qc_data.fn$fam, qc_data.fn$bim, qc_data.fn$gds)
 
 # open the file
 genofile <- snpgdsOpen(qc_data.fn$gds)
 
 # get pcs
-pca <- snpgdsPCA(genofile)
+pca <- snpgdsPCA(genofile) 
+
+# May 09, 2022 - this snpgdsPCA() call makes R crash 
 
 # close the file
 snpgdsClose(genofile)
