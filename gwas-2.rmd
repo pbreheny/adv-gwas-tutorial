@@ -18,9 +18,9 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
-## Before you begin...
+# Before you begin...
 
-### Motivating questions 
+## Motivating questions 
 
 1. What assumptions does a GWAS make about a population? 
 
@@ -29,7 +29,7 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 3. How can we make adjustments to our models to accommodate complex data that do not meet our classical assumptions? 
 
 
-### Objectives of this module 
+## Objectives of this module 
 
 When you have completed this module, you will know: 
 
@@ -68,7 +68,7 @@ cs <- col.summary(obj$genotypes) # hold onto this --- will need it later
 
 In a genetics research context, most observations (*e.g* patients or subjects) will have missing values for at least one SNP. A common method of dealing with missing SNP data is imputation. 
 
-### Why impute? 
+## Why impute? 
 
 There are two main reasons that one would use imputation:
 
@@ -92,7 +92,7 @@ table(cs$Call.rate == 1)
  
 **N.B** In the case where there is insufficient data or a lack of tagging SNPs, it is possible for the generated prediction rules to fail at yielding predictions. We will see this occur as we go through our example. 
 
-### Implementation/tools 
+## Implementation/tools 
 
 To implement imputation, we will use a three step approach:
 
@@ -102,13 +102,13 @@ To implement imputation, we will use a three step approach:
   
   3. Apply these prediction rules to our genotype matrix and "fill in the blanks"
   
-#### Determine the 'tag' SNPs
+### Determine the 'tag' SNPs
 
 A SNP is called a 'tag' SNP if it is being used to represent (or mark) a specific haplotype. Typically, a tag SNP is in a region of the genome with high linkage disequilibrium. As you will recall, the areas of the genome where there appears to be non-random association of alleles in the population are the areas of our interest. 
 
 We want to find these tag SNPs and use them to help us impute missing values. There are many algorithms that can be used to identify tag SNPs - a deep dive into this will take you into computational complexity theory. Check out [the Wikipedia page](https://en.wikipedia.org/wiki/Tag_SNP#Steps_for_tag_SNP_selection) if you want to take that plunge -- for our purposes here, we will use the same function in the `snpStats` package to both identify tag SNPs and generate prediction rules. 
 
-#### Use tag SNPs to generate prediction rules 
+### Use tag SNPs to generate prediction rules 
 
 As mentioned above, I use the `snp.imputation()` function to both identify the tag SNPs and generate the prediction rules for imputing the missing values:  
 
@@ -122,7 +122,7 @@ rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 # NB: minA is a threshold of the amount of existing data needed to impute missing values. Higher minA is a more stringent threshold. Here, we are setting the most loose threshold possible - the default threshold value is 5.
 ```
 
-#### Fill in the blanks
+### Fill in the blanks
 
 Now that we have tagged important SNPs and created rules for imputation, we can actually implement the imputation with the `impute.snps()` function. This will "fill in the blanks" in our data set, decreasing the number of missing values. 
 ```{r fill_in}
@@ -157,7 +157,7 @@ A couple of notes about this approach:
   - Of course, the simple mean imputation only applies when you are talking about a continuous trait. For a categorical outcome, you would need another approach. 
 
 
-#### Mean and Mode imputation 
+### Mean and Mode imputation 
 
 We can look at the $R^2$ values to check the imputation quality. This vignette has additional information about accessing the $R^2$ values and evaluating imputation quality with `snpstats`:
 
@@ -255,7 +255,7 @@ table(cs.imputed2$Call.rate)
 
 Or, we can check missingness using base `R` functions in multiple chunks `R` can handle. The `col.summary()` method is easier and faster, but this method is more broadly applicable.
 
-```{r}
+```{r, eval=FALSE}
 # make sure there are no missing values remaining / count missing values
 missing <- 0
 chunks <- ceiling(nrow(imputed2) / 100) # I'm breaking this up using 100 based on on trial and error but this can be tweaked.
@@ -270,7 +270,7 @@ missing # should be 0!
 
 Now we'll replace our `obj$genotypes` with the fully-imputed version, and make sure the `map` and `fam` objects are appropriately subset and ordered.
 
-```{r}
+```{r, eval=FALSE}
 obj$genotypes <- imputed2
 obj$map <- obj$map[colnames(obj$genotypes),]
 stopifnot(all.equal(colnames(obj$genotypes), as.character(obj$map$snp.name)))
@@ -279,7 +279,7 @@ stopifnot(all.equal(rownames(obj$genotypes), as.character(obj$fam$pedigree)))
 ```
 
 Let's save this imputed data set for future use in downstream analyses:
-```{r save_imp}
+```{r save_imp, eval=FALSE}
 saveRDS(obj, 'data/gwas-imp.rds')
 ```
 
@@ -312,7 +312,7 @@ Population structure is broadly categorized based on whether it describes recent
 
 
 
-### Population stratification 
+## Population stratification 
 
 Population stratification in particular has been of great concern in genetic studies due to its potential to lead to spurious associations when population structure is associated with differences in both allele frequency and the trait or disease.
 
@@ -323,11 +323,11 @@ Another apocryphal but illustrative example of how population stratification can
 * [Beware the chopsticks gene](https://www.nature.com/articles/4000662)
 
 
-### Cryptic relatedness 
+## Cryptic relatedness 
 
 An example of cryptic relatedness would be an instance where, unbeknownst to the researcher(s), some of the individuals in a study are first cousins. 
 
-### Tools/implementation 
+## Tools/implementation 
 
 GWAS (and many statistical tests) assume samples are independent. Cryptic relatedness and population structure can invalidate these tests since the presence of non-independent samples, and thus non-independent errors, can lead to inflated test statistics. 
 
@@ -341,7 +341,7 @@ obj <- readRDS('data/gwas-imp.rds')
 ```
  
 
-#### PCA example 
+### PCA example 
 
 One of the simplest and most common methods used to assess and correct for population structure in our data is with PCA. Here, I will present a 'crash course' on the concepts of PCA and give an example with our data.
 
@@ -493,13 +493,13 @@ top PCs as covariates in modeling or testing.
 
 Depending on the number of relevant pcs we adjust for, PCA can account for finer structure than the handfuls of large subpopulations we have seen so far. However, if we wanted to use PCA to adjust for finer population structure like family structure or cryptic relatedness, we would need to include a *lot* more pcs. Depending on our sample size, this may not be possible or how we want to spend our df. 
 
-#### Kinship / GRM / RRM 
+### Kinship / GRM / RRM 
 
 Kinship has a colloquial interpretation that goes along with familial relatedness - people are 'kin' who are in the same family. In genetics, a more formal definition of kinship is a measure of relatedness. Formally, the probability that an allele selected randomly from an individual, $i$, and an allele selected at the same autosomal locus from another individual, $j$, are identical and from the same ancestor.
 
 One way to measure relatedness between individuals in a GWAS context is via a measure called a **kinship coefficient** . The kinship coefficient is a probability that quantifies how likely it is that two alleles at same locus, each taken from different people, will be identical by descent. A *kinship matrix* has kinship coefficients as its elements.
 
-##### Cyptic relatedness
+### Extensions/ideas in progress -- 
 
 ```{r}
 # open the file
@@ -523,7 +523,7 @@ KING
 PCA-Air
 
 
-#### Example of a LMM 
+### Example of a LMM (forthcoming)
 
 - show how this can be done in R
 - need to read up on Anna's penalizedLMM package 
