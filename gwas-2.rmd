@@ -171,10 +171,12 @@ There are a number of ways to code this, but with `snpStats` it will require us 
 We can impute the mean or mode (i.e. 0, 1, or 2) of these SNPs. The mode will allow us to convert the imputed data back to PLINK file formats, but if that's our objective, we'll also have to check all of our `snpStats` imputed values and round them where necessary, which can take a while. If we don't need to interact with PLINK or PLINK-related R packages, we can leave non-integer genotype values as they are, and simply impute the remaining values using the mean. This will allow us to only work on the SNPs that have remaining missingness and will be faster, so that's what I'm going to do. 
 
 ```{r, impute_mean}
-(missing <- table(cs_rules_imputed$Call.rate == 1)) # use this to verify things are being subset appropriately, dimensions match, etc.
+(missing <- table(cs_rules_imputed$Call.rate == 1)) 
+# use this to verify things are being subset appropriately, dimensions match, etc.
 
 # identify which SNPs have missingness
 to_impute <- which(cs_rules_imputed$Call.rate < 1)
+# one more check 
 length(to_impute)
 
 # subset to a SnpMatrix object with only SNPs with some missingness - we want to loop
@@ -200,6 +202,35 @@ fully_imputed <- rules_imputed
 
 fully_imputed@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
+
+
+```{r, eval=FALSE, include=FALSE}
+#' A function for simple mean imputation of continous SNP data
+#' @param x A column of data from a SNP matrix
+#' @return raw A mean-imputed version of that data in raw form 
+imputed_mean <- function(x){
+  # get data from raw form into numeric - need this for calculating the mean 
+  s <- drop(as(x, 'numeric'))
+  # identify missing values in a numeric vector
+  miss_idx <- which(is.na(s)) 
+  # replace missing values with that SNP mean
+  s[miss_idx] <- mean(s, na.rm = TRUE) 
+  # convert the numeric SNP vector back to its raw, memory friendly form
+  raw <- snpStats::mean2g(s) 
+  # return raw value 
+  return(raw)
+}
+
+# FIXME: This needs to be run again (need a second try)
+mean_imputed_dat <- rules_imputed@.Data %>%
+  # as.data.frame() %>%
+  mutate(across(.cols = all_of(to_impute),
+                .fns = imputed_mean))
+
+```
+
+
+
 
 Below is code to impute using the mode, and to check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if your data isn't very big, or if using the PLINK formats is of interest. The overall structure is similar to the mean-imputation code above, but with some key differences. We will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as above.
 
@@ -268,6 +299,20 @@ for (i in 1:chunks){
   start <- stop + 1
 }
 missing # should be 0!
+
+
+
+# Check for Inf values 
+inf <- 0
+start <- 1
+for (i in 1:chunks) {
+  stop <- min(i*100, nrow(fully_imputed))
+  inf <- inf + sum(!(is.finite(fully_imputed[start:stop,])))
+  start <- stop + 1
+}
+
+inf # should be 0 
+# FIXME: I have 1054497675 infinite values! SOS! 
 ```
 
 Now we'll replace our `obj$genotypes` with the fully-imputed version, and make sure the `map` and `fam` objects are appropriately subset and ordered.
@@ -339,7 +384,7 @@ With this in mind, it is critical to evaluate and account for potential populati
 
 
 ```{r, include=FALSE}
-obj <- readRDS('data/gwas-imp.rds')
+imp_obj <- readRDS('data/gwas-imp.rds')
 ```
  
 
@@ -434,6 +479,7 @@ There is code for this in the next module (see `gwas-3.R`), but I'll include it 
 
 ```{r}
 clinical <- fread('data/GWAStutorial_clinical.csv')
+# FIXME: Consider the following line - either the variable name or the rds being called needs to change 
 imputed <- readRDS('data/gwas-qc.rds')
 write.plink(
   file.base = "data/qc_data",
@@ -491,7 +537,8 @@ plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Compone
 
 ```{r pca_base}
 # attempt to do the PCA with base R functions using the imputed data 
-X <- obj$genotypes
+imp_genotypes <- imp_obj$genotypes
+X <- imp_genotypes@.Data
 ## Mean center the variables
 # n <- nrow(X)
 # J <- matrix(1, n, n)

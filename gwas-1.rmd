@@ -193,7 +193,7 @@ This isn't exactly a QC step, but extremely helpful to do as a first step when g
 table(obj$map$chromosome)
 ```
 
-For the most part, the chromosomes are ordered by size, so chromosomes 1 and 2 are much bigger, and have many more SNPs, than chromosomes 21 and 22.  This particular data set only contains SNPs from the "autosomal" chromosomes (1-22); we do not have any data on X and Y chromosomes.  Also, there are no "strange" chromosomes, such as MT (the mitochondrial chromosome), XY (the pseudo-autosomal region of chromosome X), and 0 (SNPs that cannot be mapped to any chromosomes, which can happen for a variety of reasons).  Depending on the scientific goal, we may wish to subset our analysis down to include only the autosomal chromosomes, although this isn't necessary here since it has already been done.
+For the most part, the chromosomes are ordered by size, so chromosomes 1 and 2 are much bigger than (and have many more SNPs than) chromosomes 21 and 22.  This particular data set only contains SNPs from the "autosomal" chromosomes (1-22); we do not have any data on X and Y chromosomes.  Also, there are no "strange" chromosomes, such as MT (the mitochondrial chromosome), XY (the pseudo-autosomal region of chromosome X), and 0 (SNPs that cannot be mapped to any chromosomes, which can happen for a variety of reasons).  Depending on the scientific goal, we may wish to subset our analysis down to include only the autosomal chromosomes, although this isn't necessary here since it has already been done.
 
 ## Missing data
 
@@ -251,7 +251,7 @@ Unfortunately, this data set does not include the X chromosome, so we can't show
 
 In general, though, you have to use PLINK for this.  The relevant command is called `--check-sex`.  The relevant documentation: [1.9 documentation](https://www.cog-genomics.org/plink/1.9/basic_stats#check_sex).
 
-Note that there are no discepancies between the sex recorded in `clinical.csv` and the one recorded in the `.fam` file:
+Note that there are no discrepancies between the sex recorded in `clinical.csv` and the one recorded in the `.fam` file:
 
 ```{r check-sex}
 table(obj$fam$sex, clinical$sex)
@@ -287,7 +287,7 @@ No big outliers here, though.
 
 ## Relatedness
 
-Another common QC check that people apply is to see whether anyone in their data set is related to each other (i.e., their genomes are far more similar than the genomes of two unrelated people).  This makes sense, as most statistical methods assume independent samples and if you have, say, two sisters in the analysis, they're not really independent.  However, the tools for assessing relatedness are...ahem...related to methods for assessing population structure, which is a complex topic that I'll discuss later.
+Another common QC check that people apply is to see whether anyone in their data set is related to each other (i.e., their genomes are far more similar than the genomes of two unrelated people).  This makes sense, as most statistical methods assume independent samples and if you have, say, two sisters in the analysis, they're not really independent.  However, the tools for assessing relatedness are related to methods for assessing population structure, which is a complex topic that I'll discuss in the 'structure' module of the tutorial.
 
 ## Pipeline
 
@@ -313,6 +313,6 @@ In principle, we might also be throwing some subjects out at this point, but in 
 
 Let's save this QC'd data set for future use in downstream analyses:
 
-```{r save}
+```{r save, eval=FALSE}
 saveRDS(obj, 'data/gwas-qc.rds')
 ```
