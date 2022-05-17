@@ -125,14 +125,32 @@ rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 ### Fill in the blanks
 
 Now that we have tagged important SNPs and created rules for imputation, we can actually implement the imputation with the `impute.snps()` function. This will "fill in the blanks" in our data set, decreasing the number of missing values. 
+
 ```{r fill_in}
-rules_imputed <- impute.snps(rules, obj$genotypes, as.numeric = FALSE)
+rules_imputed <- impute.snps(rules, obj$genotypes, as.numeric = FALSE) 
+# returns SnpMatrix object
 
 
 # how many SNPs still have missing data after imputation?
 cs_rules_imputed <- col.summary(rules_imputed)
 table(cs_rules_imputed$Call.rate == 1) # TRUE = SNPs with no missing values
+
+
 ```
+
+
+```{r fill_in_numeric, eval=FALSE, include=FALSE}
+rules_imputed_numeric <- impute.snps(rules, obj$genotypes, as.numeric = TRUE)
+# returns numeric matrix (see help documentation)
+
+
+# compare this column summary to the numeric format 
+# NB: using `apply()` exhausts memory, but `sapply()` will work: 
+call_rates <- sapply(X = 1:ncol(rules_imputed_numeric),
+                    FUN = function(x){sum(!is.na(rules_imputed_numeric[,x]))/nrow(rules_imputed_numeric)})
+
+```
+
 
 Notice that even after going through the imputation process, there are still `r table(cs_rules_imputed$Call.rate == 1)[FALSE]` missing values in this data set. This is not unusual for genetics data. It is not uncommon for there to be SNPs that are both missing a notable amount of values and located "far" from surrounding SNPs. In such situations, it is not possible to impute values -- we do not know enough to impute a value in these cases. However, we also know that we cannot have any missing values in a regression model (which is where we are headed in our analysis). So, for the missing values that remain after imputation, we can use this case-by-case approach: 
 
@@ -145,10 +163,14 @@ Notice that even after going through the imputation process, there are still `r 
 
 ```{r missings}
 # how many of the SNPs with some missingness are missing for <= 50% of observations? 
-table(cs_rules_imputed$Call.rate <= 0.5)
+# NB: less than 50% missingness -> call rate at or above 50% 
+table(cs_rules_imputed$Call.rate >= 0.5)
+
+# ... and with the numeric form: 
+# sum(call_rates >= 0.5) 
 ```
 
- 
+ So we notice that all of our SNPs with remaining missing data are missing values for no more than half of the patients in the study. I will use the simple mean imputation to address this missingness - no more SNPs need to be eliminated from the analysis. 
 
 A couple of notes about this approach: 
 
@@ -204,8 +226,8 @@ fully_imputed@.Data[, to_impute] <- imputed_mean # replace the portion of the im
 ```
 
 
-```{r, eval=FALSE, include=FALSE}
-#' A function for simple mean imputation of continous SNP data
+```{r working_code1, eval=FALSE, include=FALSE}
+#' A function for simple mean imputation of continuous SNP data
 #' @param x A column of data from a SNP matrix
 #' @return raw A mean-imputed version of that data in raw form 
 imputed_mean <- function(x){
@@ -221,15 +243,74 @@ imputed_mean <- function(x){
   return(raw)
 }
 
-# FIXME: This needs to be run again (need a second try)
-mean_imputed_dat <- rules_imputed@.Data %>%
-  # as.data.frame() %>%
-  mutate(across(.cols = all_of(to_impute),
-                .fns = imputed_mean))
+# FIXME: This exhausts memory 
+mean_imputed_dat <- sapply(X = rules_imputed@.Data[,to_impute],
+                        FUN = imputed_mean)
 
 ```
 
+```{r working_code2, eval=FALSE, include=FALSE}
 
+# identify which SNPs have missingness
+to_impute <- which(call_rates < 1)
+
+# Now, I will try to perform the mean imputation on the numeric matrix 
+
+#' A function for simple mean imputation of continuous SNP data
+#' @param x A column of data from a SNP matrix
+#' @return raw A mean-imputed version of that data in raw form 
+imputed_mean <- function(x){
+  # identify missing values in a numeric vector
+  miss_idx <- which(is.na(x)) 
+  # replace missing values with that SNP mean
+  x[miss_idx] <- mean(x, na.rm = TRUE) 
+  
+  return(x)
+}
+
+# Test this function 
+x <- c(1:3, NA_real_)
+imputed_mean(x) # confirm that this is what I expect 
+
+
+fully_imputed <- sapply(X = rules_imputed_numeric[,to_impute],
+                        FUN = imputed_mean)
+
+```
+
+```{r working_code3, eval=FALSE, include=FALSE}
+(missing <- table(cs_rules_imputed$Call.rate == 1)) 
+# use this to verify things are being subset appropriately, dimensions match, etc.
+
+# identify which SNPs have missingness
+to_impute <- which(cs_rules_imputed$Call.rate < 1)
+# one more check 
+length(to_impute)
+
+# NB:  Make a copy of the imputed data with residual missingness 
+#   Later, I will want to compare the "rules_imputed" data with the "fully_imputed" data
+fully_imputed <- rules_imputed 
+
+
+# now, I implement the simple mean imputation to obtain a fully imputed data set 
+# NB: this is done in a way where only one SNP at a time is converted to a numeric
+#   otherwise, this is computationally too expensive in R
+fully_imputed@.Data[, to_impute] <- sapply(1:length(to_impute), function(x){
+  # notice the double-indexing below: x is iterating over only the columns that contain missing values
+  s <- drop(as(fully_imputed@.Data[, to_impute][,x], 'numeric'))
+  idx <- which(is.na(s)) # identify missing values in a numeric vector
+  s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
+  raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+  return(raw)
+})
+# check 
+dim(imputed_mean) 
+
+fully_imputed <- rules_imputed 
+# NB:  I'm making a copy of the imputed data with residual missingness so I can compare the snpstats "rules_imputed" data with the "fully_imputed" data
+
+fully_imputed@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
+```
 
 
 Below is code to impute using the mode, and to check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if your data isn't very big, or if using the PLINK formats is of interest. The overall structure is similar to the mean-imputation code above, but with some key differences. We will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as above.
