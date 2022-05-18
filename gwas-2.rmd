@@ -112,7 +112,7 @@ We want to find these tag SNPs and use them to help us impute missing values. Th
 
 As mentioned above, I use the `snp.imputation()` function to both identify the tag SNPs and generate the prediction rules for imputing the missing values:  
 
-```{r, gen_pred_rules}
+```{r gen_pred_rules, eval=FALSE}
 
 ?snp.imputation # check out the help file -- there is a lot here 
 
@@ -121,6 +121,13 @@ As mentioned above, I use the `snp.imputation()` function to both identify the t
 rules <- snpStats::snp.imputation(obj$genotypes, minA=0)
 # NB: minA is a threshold of the amount of existing data needed to impute missing values. Higher minA is a more stringent threshold. Here, we are setting the most loose threshold possible - the default threshold value is 5.
 ```
+
+```{r save_pred_rules, include=FALSE}
+# since snp.imputation can take a while, I am going to save this object 
+# saveRDS(rules, "data/rules.rds")
+rules <- readRDS("data/rules.rds")
+```
+
 
 ### Fill in the blanks
 
@@ -192,7 +199,7 @@ There are a number of ways to code this, but with `snpStats` it will require us 
 
 We can impute the mean or mode (i.e. 0, 1, or 2) of these SNPs. The mode will allow us to convert the imputed data back to PLINK file formats, but if that's our objective, we'll also have to check all of our `snpStats` imputed values and round them where necessary, which can take a while. If we don't need to interact with PLINK or PLINK-related R packages, we can leave non-integer genotype values as they are, and simply impute the remaining values using the mean. This will allow us to only work on the SNPs that have remaining missingness and will be faster, so that's what I'm going to do. 
 
-```{r, impute_mean}
+```{r impute_mean}
 (missing <- table(cs_rules_imputed$Call.rate == 1)) 
 # use this to verify things are being subset appropriately, dimensions match, etc.
 
@@ -225,31 +232,7 @@ fully_imputed <- rules_imputed
 fully_imputed@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
 
-
-```{r working_code1, eval=FALSE, include=FALSE}
-#' A function for simple mean imputation of continuous SNP data
-#' @param x A column of data from a SNP matrix
-#' @return raw A mean-imputed version of that data in raw form 
-imputed_mean <- function(x){
-  # get data from raw form into numeric - need this for calculating the mean 
-  s <- drop(as(x, 'numeric'))
-  # identify missing values in a numeric vector
-  miss_idx <- which(is.na(s)) 
-  # replace missing values with that SNP mean
-  s[miss_idx] <- mean(s, na.rm = TRUE) 
-  # convert the numeric SNP vector back to its raw, memory friendly form
-  raw <- snpStats::mean2g(s) 
-  # return raw value 
-  return(raw)
-}
-
-# FIXME: This exhausts memory 
-mean_imputed_dat <- sapply(X = rules_imputed@.Data[,to_impute],
-                        FUN = imputed_mean)
-
-```
-
-```{r working_code2, eval=FALSE, include=FALSE}
+```{r working_code, eval=FALSE, include=FALSE}
 
 # identify which SNPs have missingness
 to_impute <- which(call_rates < 1)
@@ -260,12 +243,18 @@ to_impute <- which(call_rates < 1)
 #' @param x A column of data from a SNP matrix
 #' @return raw A mean-imputed version of that data in raw form 
 imputed_mean <- function(x){
-  # identify missing values in a numeric vector
-  miss_idx <- which(is.na(x)) 
-  # replace missing values with that SNP mean
-  x[miss_idx] <- mean(x, na.rm = TRUE) 
   
-  return(x)
+  # make sure vector is numeric (as opposed to raw)
+  if(!is.numeric(x)){
+    s <- as(x, 'numeric')
+  } else {s <- x}
+  
+  # identify missing values in a numeric vector
+  miss_idx <- which(is.na(s)) 
+  # replace missing values with that SNP mean
+  s[miss_idx] <- mean(s, na.rm = TRUE) 
+  
+  return(s)
 }
 
 # Test this function 
@@ -275,10 +264,10 @@ imputed_mean(x) # confirm that this is what I expect
 
 fully_imputed <- sapply(X = rules_imputed_numeric[,to_impute],
                         FUN = imputed_mean)
-
+# FIXME: I get *** recursive gc invocation message 
 ```
 
-```{r working_code3, eval=FALSE, include=FALSE}
+```{r working_code2, eval=FALSE, include=FALSE}
 (missing <- table(cs_rules_imputed$Call.rate == 1)) 
 # use this to verify things are being subset appropriately, dimensions match, etc.
 
@@ -295,21 +284,21 @@ fully_imputed <- rules_imputed
 # now, I implement the simple mean imputation to obtain a fully imputed data set 
 # NB: this is done in a way where only one SNP at a time is converted to a numeric
 #   otherwise, this is computationally too expensive in R
+
+
+# .Data is a matrix containing values of type 'raw'
 fully_imputed@.Data[, to_impute] <- sapply(1:length(to_impute), function(x){
   # notice the double-indexing below: x is iterating over only the columns that contain missing values
-  s <- drop(as(fully_imputed@.Data[, to_impute][,x], 'numeric'))
+  # I need numeric values in order to calculate the mean 
+  s <- as(fully_imputed[, to_impute][,x], 'numeric')
   idx <- which(is.na(s)) # identify missing values in a numeric vector
   s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
-  raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory friendly form
+  raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory-friendly form
   return(raw)
 })
 # check 
 dim(imputed_mean) 
 
-fully_imputed <- rules_imputed 
-# NB:  I'm making a copy of the imputed data with residual missingness so I can compare the snpstats "rules_imputed" data with the "fully_imputed" data
-
-fully_imputed@.Data[, to_impute] <- imputed_mean # replace the portion of the imputed matrix with missingness with the HWE-imputed version from our loop
 ```
 
 
