@@ -150,7 +150,14 @@ table(cs_rules_imputed$Call.rate == 1) # TRUE = SNPs with no missing values
 rules_imputed_numeric <- impute.snps(rules, obj$genotypes, as.numeric = TRUE)
 # returns numeric matrix (see help documentation)
 
+```
 
+```{r save_X_numeric, eval=FALSE, include=FALSE}
+# saveRDS(rules_imputed_numeric, "data/rules_imputed_numeric.R")
+rules_imputed_numeric <- readRDS("data/rules_imputed_numeric.R")
+```
+
+```{r numeric_call_rates, include=FALSE, eval=FALSE}
 # compare this column summary to the numeric format 
 # NB: using `apply()` exhausts memory, but `sapply()` will work: 
 call_rates <- sapply(X = 1:ncol(rules_imputed_numeric),
@@ -241,9 +248,8 @@ to_impute <- which(call_rates < 1)
 
 #' A function for simple mean imputation of continuous SNP data
 #' @param j A column of data from a SNP matrix
-#' @return raw A mean-imputed version of that data in raw form 
+#' @return j A mean-imputed version of that data
 impute_mean <- function(j){
-  
   # identify missing values in a numeric vector
   miss_idx <- which(is.na(j)) 
   # replace missing values with that SNP mean
@@ -256,11 +262,40 @@ impute_mean <- function(j){
 test <- c(1:3, NA_real_)
 impute_mean(test) # confirm that this is what I expect 
 
+# Test what I want to do with the function
+mat <- matrix(c(1:3, NA_real_, 5:6, NA_real_, 8:9), nrow = 3, ncol = 3)
+test_to_impute <- which(is.na(colSums(mat)))
+mat[,test_to_impute] <- apply(X = mat[,test_to_impute],
+                              MARGIN = 2,
+                              FUN = impute_mean)
+# Yes!!  this is working 
 
-rules_imputed_numeric[,to_impute] <- apply(X = rules_imputed_numeric[,to_impute],
+fully_imputed_numeric <- rules_imputed_numeric
+fully_imputed_numeric[,to_impute] <- apply(X = rules_imputed_numeric[,to_impute],
                                            MARGIN = 2,
                                            FUN = impute_mean)
-# FIXME: I get Error: vector memory exhausted (limit reached?) 
+
+
+
+
+# Another approach 
+# fully_imputed_numeric <- matrix(nrow = nrow(rules_imputed_numeric),
+#                                 ncol = ncol(rules_imputed_numeric))
+# 
+# for (j in 1:ncol(fully_imputed_numeric)) {
+#   
+#   if(j %in% to_impute){
+#     fully_imputed_numeric[, j, drop=FALSE] <- apply(X = rules_imputed_numeric[, j, drop=FALSE],
+#                                        MARGIN = 2,
+#                                        FUN = impute_mean)
+#   } else {
+#     fully_imputed_numeric[, j, drop=FALSE] <- rules_imputed_numeric[, j, drop=FALSE]
+#   }
+#   
+# }
+
+
+
 ```
 
 ```{r working_code2, eval=FALSE, include=FALSE}
@@ -357,11 +392,11 @@ Or, we can check missingness using base `R` functions in multiple chunks `R` can
 ```{r, eval=FALSE}
 # make sure there are no missing values remaining / count missing values
 missing <- 0
-chunks <- ceiling(nrow(fully_imputed) / 100) # I'm breaking this up using 100 based on on trial and error but this can be tweaked.
+chunks <- ceiling(nrow(fully_imputed_numeric) / 100) # I'm breaking this up using 100 based on on trial and error but this can be tweaked.
 start <- 1
 for (i in 1:chunks){
-  stop <- min(i*100, nrow(fully_imputed))
-  missing <- missing + sum(is.na(fully_imputed[start:stop,]))
+  stop <- min(i*100, nrow(fully_imputed_numeric))
+  missing <- missing + sum(is.na(fully_imputed_numeric[start:stop,]))
   start <- stop + 1
 }
 missing # should be 0!
@@ -604,7 +639,7 @@ plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Compone
 ```{r pca_base}
 # attempt to do the PCA with base R functions using the imputed data 
 imp_genotypes <- imp_obj$genotypes
-X <- imp_genotypes@.Data
+X <- fully_imputed_numeric
 ## Mean center the variables
 # n <- nrow(X)
 # J <- matrix(1, n, n)
