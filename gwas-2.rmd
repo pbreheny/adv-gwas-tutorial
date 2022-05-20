@@ -240,31 +240,27 @@ to_impute <- which(call_rates < 1)
 # Now, I will try to perform the mean imputation on the numeric matrix 
 
 #' A function for simple mean imputation of continuous SNP data
-#' @param x A column of data from a SNP matrix
+#' @param j A column of data from a SNP matrix
 #' @return raw A mean-imputed version of that data in raw form 
-imputed_mean <- function(x){
-  
-  # make sure vector is numeric (as opposed to raw)
-  if(!is.numeric(x)){
-    s <- as(x, 'numeric')
-  } else {s <- x}
+impute_mean <- function(j){
   
   # identify missing values in a numeric vector
-  miss_idx <- which(is.na(s)) 
+  miss_idx <- which(is.na(j)) 
   # replace missing values with that SNP mean
-  s[miss_idx] <- mean(s, na.rm = TRUE) 
+  j[miss_idx] <- mean(j, na.rm = TRUE) 
   
-  return(s)
+  return(j)
 }
 
 # Test this function 
-x <- c(1:3, NA_real_)
-imputed_mean(x) # confirm that this is what I expect 
+test <- c(1:3, NA_real_)
+impute_mean(test) # confirm that this is what I expect 
 
 
-fully_imputed <- sapply(X = rules_imputed_numeric[,to_impute],
-                        FUN = imputed_mean)
-# FIXME: I get *** recursive gc invocation message 
+rules_imputed_numeric[,to_impute] <- apply(X = rules_imputed_numeric[,to_impute],
+                                           MARGIN = 2,
+                                           FUN = impute_mean)
+# FIXME: I get Error: vector memory exhausted (limit reached?) 
 ```
 
 ```{r working_code2, eval=FALSE, include=FALSE}
