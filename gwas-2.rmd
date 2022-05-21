@@ -298,41 +298,6 @@ fully_imputed_numeric[,to_impute] <- apply(X = rules_imputed_numeric[,to_impute]
 
 ```
 
-```{r working_code2, eval=FALSE, include=FALSE}
-(missing <- table(cs_rules_imputed$Call.rate == 1)) 
-# use this to verify things are being subset appropriately, dimensions match, etc.
-
-# identify which SNPs have missingness
-to_impute <- which(cs_rules_imputed$Call.rate < 1)
-# one more check 
-length(to_impute)
-
-# NB:  Make a copy of the imputed data with residual missingness 
-#   Later, I will want to compare the "rules_imputed" data with the "fully_imputed" data
-fully_imputed <- rules_imputed 
-
-
-# now, I implement the simple mean imputation to obtain a fully imputed data set 
-# NB: this is done in a way where only one SNP at a time is converted to a numeric
-#   otherwise, this is computationally too expensive in R
-
-
-# .Data is a matrix containing values of type 'raw'
-fully_imputed@.Data[, to_impute] <- sapply(1:length(to_impute), function(x){
-  # notice the double-indexing below: x is iterating over only the columns that contain missing values
-  # I need numeric values in order to calculate the mean 
-  s <- as(fully_imputed[, to_impute][,x], 'numeric')
-  idx <- which(is.na(s)) # identify missing values in a numeric vector
-  s[idx] <- mean(s, na.rm = TRUE) # replace missing values with that SNP mean
-  raw <- snpStats::mean2g(s) # convert the numeric SNP vector back to its raw, memory-friendly form
-  return(raw)
-})
-# check 
-dim(imputed_mean) 
-
-```
-
-
 Below is code to impute using the mode, and to check and convert any `snpStats` imputed values to the nearest integer values where necessary. This takes about 45 minutes (which is annoying), but may be worthwhile if your data isn't very big, or if using the PLINK formats is of interest. The overall structure is similar to the mean-imputation code above, but with some key differences. We will also have to re-check for monomorphic SNPs and potentially re-subset our data if we use this type of imputation. We also need to loop over all of the SNPs to check for non-integer values - I can't simply loop over the chunk with missingness as above.
 
 ```{r, impute_mode, eval = FALSE}
