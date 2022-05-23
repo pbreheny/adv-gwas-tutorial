@@ -125,7 +125,10 @@ rules <- readRDS("data/rules.rds")
 
 Now that we have tagged important SNPs and created rules for imputation, we can actually implement the imputation with the `impute.snps()` function. This will "fill in the blanks" in our data set, decreasing the number of missing values. 
 
-```{r fill_in, eval=FALSE}
+```{r fill_in, eval=FALSE, include=FALSE}
+# This is left from previous work - depracated as of May 23, 2022
+
+
 rules_imputed <- impute.snps(rules, obj$genotypes, as.numeric = FALSE) 
 # returns SnpMatrix object
 
