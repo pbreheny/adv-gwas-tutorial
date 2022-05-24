@@ -178,9 +178,8 @@ In this case, we can use base `R` functions to accomplish a PCA. For our illustr
 ### using base `R` functions 
 ```{r pca_base, eval=FALSE}
 
-# Center & cale X 
-X <- scale(X, center=TRUE, scale=FALSE) # the same
-X <- sweep(X, 2, colMeans(X), FUN='/') # this makes division
+# Center & scale X 
+X <- scale(X) # the same
 ## Compute the singular value decomposition on the centered & scaled X 
 res <- svd(t(X_tilde), nu = 0, nv = 2)
 # nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
@@ -206,15 +205,43 @@ batches <- ceiling(ncol(X) / batch_size)
 
 # create a scaled matrix
 X_scaled <- matrix(nrow = nrow(X), ncol = ncol(X))
-j <- 1 # initiate "marker" 
+# This take a while - recommend using a progress bar 
+pb <- txtProgressBar(min = 0, max = batches, initial = 0) 
 # start the loop 
 for (b in 1:batches){
-  X_scaled[,j:(j*batch_size)]
   
+  start <- b*batch_size - (batch_size - 1)
+  stop <- ifelse(b*batch_size > ncol(X_scaled),
+                 ncol(X_scaled),
+                 b*batch_size)
   
-  j = j + 1
+  # center and scale columns in batch b 
+  X_scaled[,start:stop] <- scale(X[,start:stop])
+  
+  # update progress bar
+  setTxtProgressBar(pb,b)
 }
+
+## Compute the singular value decomposition on the centered & scaled X 
+# pca <- svd(t(X_scaled), nu = 0, nv = 2)
+# nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
+# nv = 2 indicates that I am interested in only the first two PCs
+
+
+# FIXME: this makes R crash as of May 24, 2022 
 
 ```
 
+```{r pca_take_3}
+
+library(rsvd) # Paackage for randomized singular value decomposition 
+
+pca <- rpca(A = X, # the matrix of SNP data
+            k = 2, # the number of PCs to be computed
+            center = TRUE, # center the data
+            scale = TRUE, # scale the data 
+            rand = TRUE # using randomized SVD will speed things up 
+            )
+
+```
 
