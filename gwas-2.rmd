@@ -601,7 +601,7 @@ names(pctab)[-1] <- paste0('PC', 1:10)
 plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Component 1")
 ```
 
-```{r pca_base}
+```{r pca_base, eval=FALSE}
 # attempt to do the PCA with base R functions using the imputed data 
 imp_genotypes <- imp_obj$genotypes
 X <- fully_imputed_numeric
