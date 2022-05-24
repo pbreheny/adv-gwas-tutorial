@@ -44,6 +44,23 @@ The starting point for the computation in this module depends on what you did in
 
 Remember: "fully imputed" means that there are no missing values in the data set. 
 
+As a start, load the packages we will need for this module: 
+
+```{r load_pkgs}
+# Load our packages  (same ones mentioned in the data module)
+library(snpStats)
+library(SNPRelate)
+library(data.table)
+library(tidyverse)
+
+## Register cores for parallel processing - very helpful if you're on a laptop
+library(doSNOW)
+registerDoSNOW(makeCluster(4))
+
+```
+
+
+
 # Population structure
 
 ## Concept
@@ -162,7 +179,70 @@ No underlying structure = no clustering / pattern.
 
 ## PCA for large/not fully imputed data
 
-Still working on this... 
+For large data (or data that did not need impuation), we'll be using tools from the package `SNPRelate` which allow us to do key computations quickly. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\centernot\longrightarrow$. So, we need 
+to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
+
+I'll read in the clinical data, and re-load the qc-data.
+
+```{r}
+clinical <- fread('data/GWAStutorial_clinical.csv')
+# FIXME: Consider the following line - either the variable name or the rds being called needs to change 
+qc_data <- readRDS('data/gwas-qc.rds')
+write.plink(
+  file.base = "data/qc_data",
+  snps = qc_data$genotypes,
+  pedigree = qc_data$fam$pedigree,
+  id = qc_data$fam$member,
+  father = qc_data$fam$father,
+  mother = qc_data$fam$mother,
+  sex = clinical$sex,
+  phenotype = clinical$CAD + 1,
+  chromosome = qc_data$map$chromosome,
+  genetic.distance = qc_data$map$cM,
+  position = qc_data$map$position,
+  allele.1 = qc_data$map$allele.1,
+  allele.2 = qc_data$map$allele.2
+)
+```
+
+If we wanted to spend the time using the mode imputation and rounding to get a qc-data
+set with absolutely no missingness, we could do bed/bim/fam/ $\longrightarrow$ `SnpMatrix` bed/bim/fam/ $\longrightarrow$ GDS. This is annoying.
+
+We will now create our GDS file, use `SNPRelate` to compute the PCs, and plot them to see if it looks like there is any kind of sample
+structure as we saw in the previous example. We don't have a known race or subpopulation status vector to color this plot, but we can look for clustering.
+
+
+```{r pca_SNPRelate}
+# create gds file so we can use SNPRelate - using unimputed qc data
+qc_data.fn <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
+
+# IMHO, this next function is poorly named, but it will serve our purposes here... 
+snpgdsBED2GDS(qc_data.fn$bed, qc_data.fn$fam, qc_data.fn$bim, qc_data.fn$gds) 
+
+# open the GDS file
+genofile <- snpgdsOpen(qc_data.fn$gds)
+
+# get PCs
+pca <- snpgdsPCA(genofile) 
+
+# close the file
+snpgdsClose(genofile)
+
+# plot
+plot(1:10, pca$varprop[1:10], type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC')
+
+
+# put top 10 pcs in a table 
+pctab <- data.frame(sample.id = pca$sample.id,
+                    pca$eigenvect[, 1:10],
+                    stringsAsFactors = FALSE)
+names(pctab)[-1] <- paste0('PC', 1:10)
+
+# plot 
+plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Component 1")
+```
+
+
 
 
 ## PCA for fully-imputed data
