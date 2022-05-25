@@ -1,6 +1,6 @@
 # Self-guided GWAS tutorial
 
-Very much a work in progress. Uses [html](https://github.com/pbreheny/html) for rendering.
+Very much a work in progress. Uses the package [html](https://github.com/pbreheny/html) for rendering.
 
 ## Rendering
 
@@ -10,7 +10,7 @@ To turn all of the `.rmd` files into `.html` output,
 html::render_all(list.files(".", "*.rmd"))'
 ```
 
-The rendered files will appear in `_site`.
+The rendered files will appear in the `docs` folder.
 
 Alternatively, you can clone the pre-rendered pages using
 
@@ -28,8 +28,4 @@ This is often useful as it can take a long time to execute the entire tutorial.
 
 ## Pushing
 
-Changes to code can be pushed like usual. Changes to the website can be pushed with
-
-```r
-gh_pages('_site')
-```
+Changes to code can be pushed like usual, on the condition that the html files you want to push are in the `docs` folder. 

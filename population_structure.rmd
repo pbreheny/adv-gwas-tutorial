@@ -53,7 +53,7 @@ library(SNPRelate)
 library(data.table)
 library(tidyverse)
 
-## Register cores for parallel processing - very helpful if you're on a laptop
+## Register cores for parallel processing 
 library(doSNOW)
 registerDoSNOW(makeCluster(4))
 
@@ -184,9 +184,8 @@ to first convert our qc data back to bed/bim/fam using the `snpStats` function `
 
 I'll read in the clinical data, and re-load the qc-data.
 
-```{r}
+```{r load_qc_data}
 clinical <- fread('data/GWAStutorial_clinical.csv')
-# FIXME: Consider the following line - either the variable name or the rds being called needs to change 
 qc_data <- readRDS('data/gwas-qc.rds')
 write.plink(
   file.base = "data/qc_data",
