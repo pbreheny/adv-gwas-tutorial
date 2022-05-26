@@ -41,7 +41,7 @@ To begin, read in the **qc** (quality controlled) data from earlier step (refer 
 library(snpStats)
 library(SNPRelate)
 library(data.table)
-library(tidyverse)
+library(magrittr) # for the pipe operator '%>%'
 
 ## Register cores for parallel processing - very helpful if you're on a laptop
 library(doSNOW)
@@ -297,6 +297,9 @@ saveRDS(fully_imputed_numeric,
 ## When the SNP matrix is too large
 
 If the SNP matrix is too large, hold onto the `rules_imputed` object. We will use this in the population structure module (coming up next...)
+
+- add references to `biglasso`, `SNPRelate`, and `snpStats`
+
 
 # Further resources
 

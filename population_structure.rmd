@@ -258,7 +258,7 @@ In this case, we can use base `R` functions to accomplish a PCA. For our illustr
 ```{r pca_base, eval=FALSE}
 
 # Center & scale X 
-X <- scale(X) # the same
+X <- scale(X)
 ## Compute the singular value decomposition on the centered & scaled X 
 res <- svd(t(X_tilde), nu = 0, nv = 2)
 # nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
@@ -267,6 +267,8 @@ res <- svd(t(X_tilde), nu = 0, nv = 2)
 ## Compute the principal components
 (pca <- X_tilde %*% res$u)[1:2]
 
+
+# NB: using the 'prcomp' function would be another comparable approach here. 
 ```
 
 ### Using another appraoch
@@ -301,8 +303,12 @@ for (b in 1:batches){
   setTxtProgressBar(pb,b)
 }
 
+X_scaled <- ncvreg::std(X) 
+
+
+
 ## Compute the singular value decomposition on the centered & scaled X 
-# pca <- svd(t(X_scaled), nu = 0, nv = 2)
+# pca <- svd(X_scaled, nu = 0, nv = 2)
 # nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
 # nv = 2 indicates that I am interested in only the first two PCs
 
