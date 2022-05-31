@@ -1,10 +1,12 @@
 title: "GWAS tutorial"
 left:
-  - text: "Data"
-    href: gwas-1.html
-  - text: "Structure"
-    href: gwas-2.html
+  - text: "Data information & quality control"
+    href: quality_control.html
+  - text: "Imputation"
+    href: imputation.html
+  - text: "Population Structure"
+    # href: population_structure.html
   - text: "Analysis"
-    href: gwas-3.html
+    href: gwas-3.html # needs to be updated
   - text: "PostGWAS"
-    href: gwas-4.html
+    href: gwas-4.html # needs to be updated 
