@@ -51,8 +51,9 @@ As a start, load the packages we will need for this module:
 library(snpStats)
 library(SNPRelate)
 library(data.table)
-library(tidyverse)
-
+library(dplyr)
+library(magrittr)
+library(ggplot2)
 ## Register cores for parallel processing 
 library(doSNOW)
 registerDoSNOW(makeCluster(4))
@@ -151,7 +152,6 @@ Now we'll plot the first two PCs against each other, and color the data points b
 
 ```{r}
 gdat <- data.frame(Race = Race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
-library(ggplot2)
 g <- ggplot(gdat, aes(x = PC1, y = PC2, col = Race)) +
   geom_point() +
   coord_fixed()
@@ -184,8 +184,12 @@ to first convert our qc data back to bed/bim/fam using the `snpStats` function `
 
 I'll read in the clinical data, and re-load the qc-data.
 
-```{r load_qc_data}
+```{r load_clinical}
 clinical <- fread('data/GWAStutorial_clinical.csv')
+```
+
+
+```{r load_qc_data, eval=FALSE}
 qc_data <- readRDS('data/gwas-qc.rds')
 write.plink(
   file.base = "data/qc_data",
@@ -260,9 +264,9 @@ In this case, we can use base `R` functions to accomplish a PCA. For our illustr
 # Center & scale X 
 X <- scale(X)
 ## Compute the singular value decomposition on the centered & scaled X 
-res <- svd(t(X_tilde), nu = 0, nv = 2)
-# nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
-# nv = 2 indicates that I am interested in only the first two PCs
+res <- svd(t(X_tilde), nu = 2, nv = 0)
+# nv = 0 indicates that I am not interested in computing right-singular vectors - these are not needed for PCA 
+# nu = 2 indicates that I am interested in only the first two PCs
 
 ## Compute the principal components
 (pca <- X_tilde %*% res$u)[1:2]
@@ -274,54 +278,44 @@ res <- svd(t(X_tilde), nu = 0, nv = 2)
 ### Using another appraoch
 
   At the time of this writing, the code above makes my `R` session crash. 
-As an alternative approaches, I can center and scale the matrix in "chunks", instead of trying to scale all of $X$ at once. 
+As an alternative approach, I can use the function `std` from the `ncvreg` package. 
 
 
 ```{r pca_alternative, eval=FALSE}
-# determine the size of the "chunks" 
-# remember, we are centering & scaling the columns (SNPs)
-batch_size <- 1000
-
-batches <- ceiling(ncol(X) / batch_size) 
-
-# create a scaled matrix
-X_scaled <- matrix(nrow = nrow(X), ncol = ncol(X))
-# This take a while - recommend using a progress bar 
-pb <- txtProgressBar(min = 0, max = batches, initial = 0) 
-# start the loop 
-for (b in 1:batches){
-  
-  start <- b*batch_size - (batch_size - 1)
-  stop <- ifelse(b*batch_size > ncol(X_scaled),
-                 ncol(X_scaled),
-                 b*batch_size)
-  
-  # center and scale columns in batch b 
-  X_scaled[,start:stop] <- scale(X[,start:stop])
-  
-  # update progress bar
-  setTxtProgressBar(pb,b)
-}
-
+# Center and scale the design matrix 
 X_scaled <- ncvreg::std(X) 
-
-
-
 ## Compute the singular value decomposition on the centered & scaled X 
 # pca <- svd(X_scaled, nu = 0, nv = 2)
 # nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
 # nv = 2 indicates that I am interested in only the first two PCs
 
-
 # FIXME: this makes R crash as of May 24, 2022 
 
+
+# Let's try using the Rspectra package 
+# remove unscaled X object to save memory
+rm(X)
+library(RSpectra)
+?svds()
+singular_vectors <- svds(X_scaled,
+                         k = 2,
+                         nu = 2, # NB: default is nu = k
+                         nv = 0)
+
+# calculate the PCs                          
+PCs <- t(X_scaled) %*% singular_vectors$u
+
+# create a plot of the first two PCs
+PC_plot <- plot(PCs[,1], PCs[,2], xlab="Principal Component 1", ylab="Principal Component 2")
+
+(PC_plot)
 ```
 
-```{r pca_take_3}
+```{r pca_with_rsvd, eval=FALSE}
 
-library(rsvd) # Paackage for randomized singular value decomposition 
+# library(rsvd) # Paackage for randomized singular value decomposition 
 
-pca <- rpca(A = X, # the matrix of SNP data
+pca <- rsvd::rpca(A = X, # the matrix of SNP data
             k = 2, # the number of PCs to be computed
             center = TRUE, # center the data
             scale = TRUE, # scale the data 
