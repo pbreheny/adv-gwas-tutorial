@@ -26,13 +26,15 @@ This tutorial was inspired by similar work in [Reed2015](https://dx.doi.org/10.1
 
 This tutorial is broken down into four sections: 1) Data formats, summary statistics and quality control, 2) Imputation and population structure, 3) SNP Testing, and 4) Post analysis and biological relevance.
 
-## [Data Formats, Summary Statistics, and QC](gwas-1.html)
+## [Data Formats, Summary Statistics, and QC](quality_control.html)
 
 This section covers the basics from different file types to initial things to look for in the data and how to exclude certain parts of the data that would muddy our end results.
 
-## [Imputation and Population Structure](gwas-2.html)
+## [Imputation](imputation.html)
 
 The next section covers some important considerations that should eb taken into account before completing the analysis but which are not necessarily covered under quality control. Imputation is a method underwhich missing data is replaced using a logical method. Population structure helps us take into account possible confounders that may exist in our dataset that would incorrectly inflate results such as familial relations.
+
+## [Population Structure](population_structure.html)
 
 ## [SNP Testing](gwas-3.html)
 
@@ -40,4 +42,4 @@ SNP testing gets down the results we are looking for: associated loci for our ph
 
 ## [Post Analysis](gwas-4.html)
 
-Finally, we attempt to take the results and turn them into something meaningful. For instance I could tell you some SNP, but it will have no mean to you unless you have spent time studying it. On the other hand, if I tell you that a variant of a SNP is associated wi improper functioning of chloride channels, that will hgave a great deal more significance.
+Finally, we attempt to take the results and turn them into something meaningful. For instance, I could tell you some SNP, but it will have no mean to you unless you have spent time studying it. On the other hand, if I tell you that a variant of a SNP is associated with improper functioning of chloride channels, that will have a great deal more significance.
