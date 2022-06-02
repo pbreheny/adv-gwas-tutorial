@@ -5,7 +5,7 @@ left:
   - text: "Imputation"
     href: imputation.html
   - text: "Population Structure"
-    # href: population_structure.html
+    href: population_structure.html
   - text: "Analysis"
     href: gwas-3.html # needs to be updated
   - text: "PostGWAS"

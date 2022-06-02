@@ -137,7 +137,8 @@ dim(X)
 table(Race)
 ```
 
-Next, I'm going to compute the principal components (PCs) and plot a scree plot. This tells us the proportion of variance explained by each of the PCs. PCA is such that the PCs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many PCs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional PCs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 PCs are simply used in practice. 
+Next, I'm going to compute the principal components (PCs) and plot a [scree plot](https://en.wikipedia.org/wiki/Scree). A scree plot tells us the proportion of variance explained by each of the PCs. PCA is such that the PCs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many PCs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional PCs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 PCs are simply used in practice. 
+
 ```{r, plot_admixture}
 pca <- prcomp(X, center = TRUE, scale = TRUE)
 pca$x[1:5, 1:5]
@@ -262,14 +263,14 @@ In this case, we can use base `R` functions to accomplish a PCA. For our illustr
 ```{r pca_base, eval=FALSE}
 
 # Center & scale X 
-X <- scale(X)
+X_scaled <- scale(X)
 ## Compute the singular value decomposition on the centered & scaled X 
-res <- svd(t(X_tilde), nu = 2, nv = 0)
+res <- svd(t(X_scaled), nu = 2, nv = 0)
 # nv = 0 indicates that I am not interested in computing right-singular vectors - these are not needed for PCA 
 # nu = 2 indicates that I am interested in only the first two PCs
 
 ## Compute the principal components
-(pca <- X_tilde %*% res$u)[1:2]
+(pca <- X_scaled %*% res$u)[1:2]
 
 
 # NB: using the 'prcomp' function would be another comparable approach here. 
@@ -281,7 +282,7 @@ res <- svd(t(X_tilde), nu = 2, nv = 0)
 As an alternative approach, I can use the function `std` from the `ncvreg` package. 
 
 
-```{r pca_alternative, eval=FALSE}
+```{r pca_alternative}
 # Center and scale the design matrix 
 X_scaled <- ncvreg::std(X) 
 ## Compute the singular value decomposition on the centered & scaled X 
@@ -293,10 +294,11 @@ X_scaled <- ncvreg::std(X)
 
 
 # Let's try using the Rspectra package 
-# remove unscaled X object to save memory
-rm(X)
+
+rm(X) # remove unscaled X object to save memory
 library(RSpectra)
 ?svds()
+# Use singular value decomposition to derive the left singular vectors 
 singular_vectors <- svds(X_scaled,
                          k = 2,
                          nu = 2, # NB: default is nu = k
