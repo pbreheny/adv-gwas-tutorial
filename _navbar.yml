@@ -1,12 +1,20 @@
 title: "GWAS tutorial"
-left:
-  - text: "Data information & quality control"
-    href: quality_control.html
-  - text: "Imputation"
-    href: imputation.html
-  - text: "Population Structure"
-    href: population_structure.html
-  - text: "Analysis"
-    href: gwas-3.html # needs to be updated
-  - text: "PostGWAS"
-    href: gwas-4.html # needs to be updated 
+
+navbar:
+  left:
+    - icon: fa-home fa-lg
+      href: docs/index.html
+    - text: "Data information & quality control"
+      href: docs/quality_control.html
+    - text: "Imputation"
+      href: docs/imputation.html
+    - text: "Population Structure"
+      href: docs/population_structure.html
+    - text: "Analysis"
+      href: docs/gwas-3.html # needs to be updated
+    - text: "PostGWAS"
+      href: docs/gwas-4.html # needs to be updated 
+right:
+    github:
+      icon: fa-github fa-lg
+      href: https://github.com/pbreheny/adv-gwas-tutorial
