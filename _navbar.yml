@@ -3,17 +3,17 @@ title: "GWAS tutorial"
 navbar:
   left:
     - icon: fa-home fa-lg
-      href: docs/index.html
+      href: index.html
     - text: "Data information & quality control"
-      href: docs/quality_control.html
+      href: quality_control.html
     - text: "Imputation"
-      href: docs/imputation.html
+      href: imputation.html
     - text: "Population Structure"
-      href: docs/population_structure.html
+      href: population_structure.html
     - text: "Analysis"
-      href: docs/gwas-3.html # needs to be updated
+      href: gwas-3.html # needs to be updated
     - text: "PostGWAS"
-      href: docs/gwas-4.html # needs to be updated 
+      href: gwas-4.html # needs to be updated 
 right:
     github:
       icon: fa-github fa-lg
