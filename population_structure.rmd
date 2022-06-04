@@ -48,13 +48,19 @@ As a start, load the packages we will need for this module:
 
 ```{r load_pkgs}
 # Load our packages  (same ones mentioned in the data module)
-library(snpStats)
+# two pacakges are from Bioconductor 
+library(snpStats) 
 library(SNPRelate)
+
+# all other packages are on CRAN 
 library(data.table)
 library(dplyr)
 library(magrittr)
 library(ggplot2)
-## Register cores for parallel processing 
+library(ncvreg)
+library(RSpectra)
+
+# register cores for parallel processing 
 library(doSNOW)
 registerDoSNOW(makeCluster(4))
 
@@ -96,8 +102,9 @@ GWAS (and many statistical tests) assume samples are independent. Cryptic relate
 With this in mind, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
  
  
-## Principle component analysis (PCA) - brief introduction
+## Principle component analysis (PCA)
  
+### Brief introduction  
  One of the simplest and most common methods used to assess and correct for population structure in our data is with principle component analysis (PCA). Here, I will present a 'crash course' on the concepts of PCA and provide an example.
 
   Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. PCA creates linear combinations of a given set of variables; this lets the user represent a lot of correlated variables with a smaller number of uncorrelated variables - so PCA gives us **dimension reduction**, which is really helpful for high dimensional settings like GWAS data.
@@ -108,86 +115,184 @@ With this in mind, it is critical to evaluate and account for potential populati
 
   - From a machine learning framework, PCA is a type of unsupervised learning. 
   
-  A typical PCA includes the following steps: 
+As a brief example with a smaller data set, I'm going to illustrate some of these concepts using some smaller data with known structure. 
 
-  1. Standardize (center and scale) the data.  
-  
-  2. Calculate the covariance matrix $\textbf{S} = \tilde{X}^T \tilde{X}$, where $\tilde{X}$ is our centered and scaled design matrix from step (1). 
-  
-  3. Find the eigenvectors and eigenvalues of $\textbf{S}$
-  
-  4. Calculate the inner products of the columns of $\tilde{X}$ and the associated eigenvectors - these inner products are the **principal components**, whereas the eigenvector coefficients are the **principal component loadings**
-  
-  5. Determine a number of principal components to keep, and create a feature vector with only these components
-  
-  6. Plot the feature vector along the principal component axes (as opposed to the axes of the original data space) - these plots can reveal clusters/population structures within the data 
+First, we'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
 
-  
-Our data will require special tools for PCA because of its size. We'll get there, but to start, I'm going to illustrate some of these concepts using some smaller data with known structure. First, we'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
+```{r process_admixture}
+# read in smaller data 
+smaller_data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt")
+# see what it looks like 
+smaller_data[1:5, 1:5]
+# assign the 'race' variable 
+race <- smaller_data$Race
+ # create a matrix with only SNP data 
+all_SNPs <- as.matrix(smaller_data[,-1])
+# filter out monomorphic SNPs
+polymorphic <- apply(all_SNPs, 2, sd) != 0
+SNPs<- all_SNPs[,polymorphic] 
 
-```{r, process_admixture}
-Data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt")
-Data[1:5, 1:5]
-Race <- Data$Race
-XX <- as.matrix(Data[,-1]) # create an all SNP mat
-polymorphic <- apply(XX, 2, sd) != 0
-X <- XX[,polymorphic] # filter out monomorphic SNPs
-dim(X)
-# [1] 197  98
-table(Race)
+# look at the resulting matrix dimensions
+dim(SNPs)
+# see what the data set looks like in terms of racial categories 
+table(race)
 ```
 
 Next, I'm going to compute the principal components (PCs) and plot a [scree plot](https://en.wikipedia.org/wiki/Scree). A scree plot tells us the proportion of variance explained by each of the PCs. PCA is such that the PCs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many PCs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional PCs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 PCs are simply used in practice. 
 
-```{r, plot_admixture}
-pca <- prcomp(X, center = TRUE, scale = TRUE)
+```{r scree_admixture}
+# use the convenient prcomp() function to do all the PCA steps in one line! 
+pca <- prcomp(SNPs, center = TRUE, scale = TRUE)
+# look at the results 
 pca$x[1:5, 1:5]
-# I'm only plotting the top 10 PCs
-plot(1:10, pca$sdev[1:10]^2, type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC', main = 'Scree Plot')
+# plot the top 10 PCs in a scree plot 
+plot(x = 1:10,
+     y = 100 * proportions(pca$sdev[1:10]^2),
+     type = 'b',
+     ylab = 'Proportion of variance explained',
+     xlab = 'PC',
+     main = 'Example Scree Plot')
 
 ```
 
-We see this elbow point at 3 PCs, which makes sense, given that there are 4 distinct races in this data set (we lose one degree of freedom when we center our data).
+We see this elbow point at 3 PCs, which makes sense, given that there are 4 distinct races in this data set (we lose one degree of freedom when we center our data). The first PC explains about $30 \%$ of the variance in our data, while the second PC explains a little less than $20 \%$. Together, this means that the first 3 PCs explain over half of the variance in the data set. 
 
 Now we'll plot the first two PCs against each other, and color the data points by the known race of each subject. We expect to see clustering that corresponds to population structure. 
 
-```{r}
-gdat <- data.frame(Race = Race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
-g <- ggplot(gdat, aes(x = PC1, y = PC2, col = Race)) +
+```{r plot_admixture}
+pca_dat <- data.frame(race = race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
+pca_plot <- ggplot(pca_dat, aes(x = PC1, y = PC2, col = race)) +
   geom_point() +
   coord_fixed()
-plot(g)
+plot(pca_plot)
 ```
 
 Indeed, we see that the first two PCs differentiate the racial groups, which cluster together. We can see that PC1 seems to differentiate the European/Japanese populations from the African/African American ones, while PC2 seems to primarily differentiate the European and Japanese populations. Even if we did not have the known race vector to color the points, we could still pick out some clustering from this plot, which indicates underlying structure. If there were no underlying structure in our data, we would expect to see no clustering or systematic pattern in this plot. 
 
-As a counter example to this plot, we can plot the PCs from a random matrix:
+As a counter example to this plot, we can plot the PCs from a random matrix (*i.e.* a matrix with no population structure):
 
-```{r}
-# I'm going to use the same dimensions as those in the admixture data.
+```{r pc_rand}
+# for the sake of illustration, I'm going to use the same dimensions as those 
+#   in the smaller data in the previous example.
 n <- 197
 p <- 98
-XX <- matrix(rnorm(n * p), n, p)
-pca2 <- prcomp(XX, center = TRUE, scale = TRUE)
-gdat2 <- data.frame(PC1 = pca2$x[,1], PC2 = pca2$x[, 2])
-g <- ggplot(gdat2, aes(x = PC1, y = PC2)) +
+X <- matrix(rnorm(n * p), n, p)
+pca_rand <- prcomp(X, center = TRUE, scale = TRUE)
+rand_dat <- data.frame(PC1 = pca_rand$x[,1], PC2 = pca_rand$x[, 2])
+rand_plot <- ggplot(rand_dat,
+                    aes(x = PC1, y = PC2)) +
   geom_point() +
   coord_fixed()
-plot(g)
+plot(rand_plot)
 ```
 
-No underlying structure = no clustering / pattern.
+We see that in this plot, there is underlying structure = no clustering or pattern. If I saw results like this "in the wild", I would be fairly confident that population structure is not a major issue in my data set. 
 
-## PCA for large/not fully imputed data
+  
+### PCA for fully-imputed data  
+  
+Now, let's go back to our running example with the large SNP data set. For our case, let's call our SNP data $X$. I can think of $X$ as a matrix, where I have $n$ rows (in this case, n = 1401) and $p$ is the number of columns (in this case, p = 752,675). Since we have $p >> n$, we cannot simply use the spectral decomposition to calculate the eigenvalues of the covariance matrix  $\mathbf{S} \equiv \tilde{\mathbf{X}}^T \tilde{\mathbf{X}}$, since this $\mathbf{S}$ will not be positive definite (and it will be HUGE!). Instead, we will use a method that exploits the power of the **singular value decomposition**: 
+ 
+  1. Standardize (center and scale) the data $\mathbf{X}$, and call the resulting matrix $\tilde{\mathbf{X}}$.  
+  
+  2. Calculate $\tilde{\mathbf{X}} \equiv \mathbf{U}\mathbf{D}\mathbf{V}^T$ using the singular value decomposition (SVD). Here, $\mathbf{U}$ and $\mathbf{V}$ are both orthogonal matrices, and $\mathbf{D}$ is a diagonal matrix of non-negative numbers. We say that $\mathbf{U}$ and $\mathbf{V}$ contain the left and right singular vectors, respectively. The values on the diagonal of $\mathbf{D}$ are the singular values. 
+  
+  3. We can calculate the principal components using the vectors of $\mathbf{U}$, which is super cool! This is possible because the columns of $\mathbf{U}$ are eigenvectors of the covariance matrix $\mathbf{S}$. Specifically, the $i^{th}$ principal component $p_i$ can be calculated as $p_i = \tilde{\mathbf{X}}u_i$, where $u_i$ is the $i^{th}$ column of $\mathbf{U}$. 
+  
+  
+  In other words, using SVD gives us a way to find the eigenvalues of $\mathbf{S}$ that does not involve finding its spectral decomposition.
+  
+We will put these steps into practice now - if you have saved the fully imputed data set, load it here: 
 
-For large data (or data that did not need impuation), we'll be using tools from the package `SNPRelate` which allow us to do key computations quickly. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\centernot\longrightarrow$. So, we need 
-to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
+```{r load_X}
+X <- readRDS(file = "data/fully_imputed_numeric.rds")
+```
 
-I'll read in the clinical data, and re-load the qc-data.
+Remember, we cannot use the `prcomp()` function on our SNP data set - it is too big. We will need some other tools: 
+
+  - I will use the function `std` from the `ncvreg` package to standardize $\mathbf{X}$
+  
+  - I will use the `svds()` function from the `RSpectra` package do implement the singular value decomposition
+  
+Since we are usually only interested in the first few PCs, I will calcuate just the first 4 PCs in this example. 
+
+
+```{r pca}
+# Center and scale the design matrix 
+X_scaled <- ncvreg::std(X)
+# remove unscaled X object to save memory
+rm(X)
+# use singular value decomposition to derive the left singular vectors 
+# NB: on my laptop, this took about 10 minutes to run 
+singular_vectors <- svds(t(X_scaled),
+                         k = 4,
+                         nu = 4, # NB: default is nu = k
+                         nv = 0)
+# check the dimension of the returned "u" matrix - we should have ncol(u) = k
+dim(singular_vectors$u) 
+# calculate the PCs                          
+PCs <- X_scaled %*% singular_vectors$u
+
+```
+
+```{r scree}
+# find the standard deviations of each PC
+PC_sds <- apply(X = PCs,
+                MARGIN = 2, # columns are PCs
+                FUN = sd)
+# create a scree plot
+plot(x = 1:ncol(PCs),
+     y =  100 * proportions(PC_sds^2),
+     type = 'b',
+     ylab = 'Proportion of variance explained',
+     xlab = 'PC',
+     main = 'Scree Plot: SNP data')
+```
+
+Here, we see that the first PC explains over half of the variance in the data set. This indicates that there is probably evidence of population structure in this data set. Based on this, I expect that a plot of the principal components themselves will show strong clustering. 
+
+```{r pca_plot}
+# create a plot of the first two PCs
+PC_dat <- as_tibble(PCs) # make a data set (better than a matrix for plotting)
+names(PC_dat) <- paste0("PC", 1:ncol(PCs))
+# plot these principal components
+PC_dat %>%
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point() +
+  coord_fixed()
+```
+
+
+We notice in the plot above that there is indeed notable clustering - we have evidence that our SNP data does have population structure. We will need to keep this in mind as we move forward to analysis, as this will guide our choice(s) of tools for analysis and interpretation. 
+
+Similar to examining racial group in our example PCA, we can use the clinical features in our SNP data set to see if there is any relationship between these clinical factors and the clustering we see in our PCA. 
 
 ```{r load_clinical}
-clinical <- fread('data/GWAStutorial_clinical.csv')
+# load our clinical data 
+clinical <- fread('data/GWAStutorial_clinical.csv') %>%
+  mutate(across(.cols = c(sex, CAD),
+                .fns = as.factor))
+# remind ourselves of what clinical/demographic information we have 
+head(clinical)
+# plot these principal components, using color codes to differentiate sexes
+PC_dat %>%
+  ggplot(aes(x = PC1, y = PC2,
+             col = clinical$sex)) +
+  geom_point() +
+  coord_fixed() + 
+  theme(legend.position = "none")
+
+
 ```
+
+Based on the plot above, sex does not seem to be associated with the clustering we see in the principal components.  
+
+### PCA for large/not fully imputed data
+
+For really large data (or data that did not need imputation), we'll be using tools from the package `SNPRelate` which allow us to do key computations without having a fully imputed SNP data set. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\longrightarrow$ GDS. So, we need 
+to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
+
+I'll re-load the qc-data from the quality control module.
 
 
 ```{r load_qc_data, eval=FALSE}
@@ -210,7 +315,7 @@ write.plink(
 ```
 
 If we wanted to spend the time using the mode imputation and rounding to get a qc-data
-set with absolutely no missingness, we could do bed/bim/fam/ $\longrightarrow$ `SnpMatrix` bed/bim/fam/ $\longrightarrow$ GDS. This is annoying.
+set with absolutely no missingness, we could do bed/bim/fam/ $\longrightarrow$ `SnpMatrix` bed/bim/fam/ $\longrightarrow$ GDS (this is annoying).
 
 We will now create our GDS file, use `SNPRelate` to compute the PCs, and plot them to see if it looks like there is any kind of sample
 structure as we saw in the previous example. We don't have a known race or subpopulation status vector to color this plot, but we can look for clustering.
@@ -247,82 +352,10 @@ plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Compone
 ```
 
 
+# Acknowledgements 
+
+I want to thank Prof. Brian Smith - my brief explanation of principal component analysis (including all my notation) is based on his PCA lecture in his Machine Learning course (Spring 2022). If you are interested in doing more with machine learning, I highly recommend [his R package](https://github.com/brian-j-smith/MachineShop) `MachineShop`.  
 
 
-## PCA for fully-imputed data
 
-If you have saved the fully imputed data set, load it here: 
-
-```{r load_X}
-X <- readRDS(file = "data/fully_imputed_numeric.rds")
-```
-
-In this case, we can use base `R` functions to accomplish a PCA. For our illustration, suppose we are only interested in the first two PCs. 
-
-### using base `R` functions 
-```{r pca_base, eval=FALSE}
-
-# Center & scale X 
-X_scaled <- scale(X)
-## Compute the singular value decomposition on the centered & scaled X 
-res <- svd(t(X_scaled), nu = 2, nv = 0)
-# nv = 0 indicates that I am not interested in computing right-singular vectors - these are not needed for PCA 
-# nu = 2 indicates that I am interested in only the first two PCs
-
-## Compute the principal components
-(pca <- X_scaled %*% res$u)[1:2]
-
-
-# NB: using the 'prcomp' function would be another comparable approach here. 
-```
-
-### Using another appraoch
-
-  At the time of this writing, the code above makes my `R` session crash. 
-As an alternative approach, I can use the function `std` from the `ncvreg` package. 
-
-
-```{r pca_alternative}
-# Center and scale the design matrix 
-X_scaled <- ncvreg::std(X) 
-## Compute the singular value decomposition on the centered & scaled X 
-# pca <- svd(X_scaled, nu = 0, nv = 2)
-# nu = 0 indicates that I am not interested in computing left-singular vectors - these are not needed for PCA 
-# nv = 2 indicates that I am interested in only the first two PCs
-
-# FIXME: this makes R crash as of May 24, 2022 
-
-
-# Let's try using the Rspectra package 
-
-rm(X) # remove unscaled X object to save memory
-library(RSpectra)
-?svds()
-# Use singular value decomposition to derive the left singular vectors 
-singular_vectors <- svds(X_scaled,
-                         k = 2,
-                         nu = 2, # NB: default is nu = k
-                         nv = 0)
-
-# calculate the PCs                          
-PCs <- t(X_scaled) %*% singular_vectors$u
-
-# create a plot of the first two PCs
-PC_plot <- plot(PCs[,1], PCs[,2], xlab="Principal Component 1", ylab="Principal Component 2")
-
-(PC_plot)
-```
-
-```{r pca_with_rsvd, eval=FALSE}
-
-# library(rsvd) # Paackage for randomized singular value decomposition 
-
-pca <- rsvd::rpca(A = X, # the matrix of SNP data
-            k = 2, # the number of PCs to be computed
-            center = TRUE, # center the data
-            scale = TRUE, # scale the data 
-            rand = TRUE # using randomized SVD will speed things up 
-            )
-
-```
 

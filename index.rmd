@@ -32,14 +32,16 @@ This section covers the basics from different file types to initial things to lo
 
 ## [Imputation](imputation.html)
 
-The next section covers some important considerations that should eb taken into account before completing the analysis but which are not necessarily covered under quality control. Imputation is a method underwhich missing data is replaced using a logical method. Population structure helps us take into account possible confounders that may exist in our dataset that would incorrectly inflate results such as familial relations.
+Imputation describes the process of handling missing data by replacing missing values with a logical method. Some methods for analyzing SNP data (in particular, any regression methods) cannot handle missing values, so the issue of missing data must be addresseed prior to analysis. 
 
 ## [Population Structure](population_structure.html)
 
+Population structure helps us take into account possible confounding factors (such as familial relationships) that may exist in our data set. If we do not adjust for them explicitly, such confounding factors could incorrectly inflate results and make our inferences biased.
+
 ## [SNP Testing](gwas-3.html)
 
-SNP testing gets down the results we are looking for: associated loci for our phenotypes of interest. This is the easy part if we complete the prior two sections correctly.
+SNP testing gets down the results which are the "featured presentation": associated loci for our phenotypes of interest. This is straightforward if we complete the prior two sections correctly.
 
 ## [Post Analysis](gwas-4.html)
 
-Finally, we attempt to take the results and turn them into something meaningful. For instance, I could tell you some SNP, but it will have no mean to you unless you have spent time studying it. On the other hand, if I tell you that a variant of a SNP is associated with improper functioning of chloride channels, that will have a great deal more significance.
+Finally, we attempt to take the results and turn them into something clinically meaningful. For instance, I could tell you some SNP, but it will have no mean to you unless you have spent time studying it. On the other hand, if I tell you that a variant of a SNP is associated with improper functioning of chloride channels, that will have a great deal more significance. 

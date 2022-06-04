@@ -4,7 +4,7 @@ author: Patrick Breheny and Logan Harris
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 ---
 
-Note: Currently undergoing updates
+**Note**: This page is currently undergoing updates - stay tuned for a finalized version 
 
 ```{r knitr_setup, include=FALSE, purl=FALSE}
 library(knitr)

@@ -15,6 +15,8 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
+**Note**: This page is currently undergoing updates - stay tuned for a finalized version 
+
 # ANNOVAR
 
 ## Steps Using WSL
