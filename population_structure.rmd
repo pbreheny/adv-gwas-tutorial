@@ -30,17 +30,17 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 
 When you have completed this module, you will know: 
 
-1. ... how to summarize the assumptions (biological and statistical) that a GWAS makes about the individuals in a study and the structure of the data. 
+1. How to summarize the assumptions (biological and statistical) that a GWAS makes about the individuals in a study and the structure of the data. 
 
-2. ... how to identify instances when your data show evidence of **not** meeting these assumptions. 
+2. How to identify instances when your data show evidence of **not** meeting these assumptions. 
 
-3. ... what tools are available for analyzing complex data that do not meet the basic GWAS assumptions. 
+3. What tools are available for analyzing complex data that do not meet the basic GWAS assumptions. 
 
-4. ... how to implement the tools mentioned above using `R`
+4. How to implement the tools mentioned above using `R`
 
 ## Set up 
 
-The starting point for the computation in this module depends on what you did in the previous module (imputation). If your data was too big to read into your computer's memory, read the section labeled "PCA for large/not fully imputed data" for your computational methods. If you were able to work with a matrix of all your SNP data, refer to the "PCA for fully-imputed data" for computational methods.   
+The computational methods section of this module is divided into two sections, according to the type of data set you are bringing into this module. If you skipped the imputation module of this tutorial, or if your data was too big to read into your computer's memory, read the section labeled "PCA for large/not fully imputed data" for your computational methods. If you completed imputation for your data set, refer to the "PCA for fully-imputed data" section.   
 
 Remember: "fully imputed" means that there are no missing values in the data set. 
 
@@ -48,7 +48,7 @@ As a start, load the packages we will need for this module:
 
 ```{r load_pkgs}
 # Load our packages  (same ones mentioned in the data module)
-# two pacakges are from Bioconductor 
+# two packages are from Bioconductor 
 library(snpStats) 
 library(SNPRelate)
 
@@ -93,7 +93,7 @@ Another apocryphal but illustrative example of how population stratification can
 
 ## Cryptic relatedness 
 
-An example of cryptic relatedness would be an instance where, unbeknownst to the researcher(s), some of the individuals in a study are first cousins. 
+In the context of GWAS data, cryptic relatedness is the phrase used to describe a situation when individuals in a study are more closely related than assumed by the investigators. For example, it could be possible that some of the individuals in a study are first cousins, unbeknownst to the researcher(s). This kind of unknown relatedness can act as a confounding factor in a GWAS analysis. Like population stratification, cryptic relatedness can lead to inflated false positive rates in gene-association studies. The former is usually characterized by having differences among groups of subjects, while the latter is typically characterized by unknown relatedness among individual subjects in the study. 
 
 ## Tools/implementation 
 
@@ -102,10 +102,10 @@ GWAS (and many statistical tests) assume samples are independent. Cryptic relate
 With this in mind, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
  
  
-## Principle component analysis (PCA)
+## Principal component analysis (PCA)
  
 ### Brief introduction  
- One of the simplest and most common methods used to assess and correct for population structure in our data is with principle component analysis (PCA). Here, I will present a 'crash course' on the concepts of PCA and provide an example.
+ One of the simplest and most common methods used to assess and correct for population structure in our data is with principal component analysis (PCA). Here, I will present a 'crash course' on the concepts of PCA and provide an example.
 
   Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. PCA creates linear combinations of a given set of variables; this lets the user represent a lot of correlated variables with a smaller number of uncorrelated variables - so PCA gives us **dimension reduction**, which is really helpful for high dimensional settings like GWAS data.
   
@@ -191,16 +191,13 @@ We see that in this plot, there is underlying structure = no clustering or patte
   
 ### PCA for fully-imputed data  
   
-Now, let's go back to our running example with the large SNP data set. For our case, let's call our SNP data $X$. I can think of $X$ as a matrix, where I have $n$ rows (in this case, n = 1401) and $p$ is the number of columns (in this case, p = 752,675). Since we have $p >> n$, we cannot simply use the spectral decomposition to calculate the eigenvalues of the covariance matrix  $\mathbf{S} \equiv \tilde{\mathbf{X}}^T \tilde{\mathbf{X}}$, since this $\mathbf{S}$ will not be positive definite (and it will be HUGE!). Instead, we will use a method that exploits the power of the **singular value decomposition**: 
+Now, let's go back to our running example with the large SNP data set. For our case, let's call our SNP data $X$. I can think of $X$ as a matrix, where I have $n$ rows (in this case, n = 1401) and $p$ is the number of columns (in this case, p = 752,675). Since we have $p >> n$, we cannot simply use the spectral decomposition to calculate the eigenvalues of the covariance matrix  $\mathbf{S} \equiv \tilde{\mathbf{X}} \tilde{\mathbf{X}}^T$, as this $\mathbf{S}$ may not be positive definite. Instead, we will use a method that exploits the power of the **singular value decomposition**: 
  
   1. Standardize (center and scale) the data $\mathbf{X}$, and call the resulting matrix $\tilde{\mathbf{X}}$.  
   
   2. Calculate $\tilde{\mathbf{X}} \equiv \mathbf{U}\mathbf{D}\mathbf{V}^T$ using the singular value decomposition (SVD). Here, $\mathbf{U}$ and $\mathbf{V}$ are both orthogonal matrices, and $\mathbf{D}$ is a diagonal matrix of non-negative numbers. We say that $\mathbf{U}$ and $\mathbf{V}$ contain the left and right singular vectors, respectively. The values on the diagonal of $\mathbf{D}$ are the singular values. 
   
-  3. We can calculate the principal components using the vectors of $\mathbf{U}$, which is super cool! This is possible because the columns of $\mathbf{U}$ are eigenvectors of the covariance matrix $\mathbf{S}$. Specifically, the $i^{th}$ principal component $p_i$ can be calculated as $p_i = \tilde{\mathbf{X}}u_i$, where $u_i$ is the $i^{th}$ column of $\mathbf{U}$. 
-  
-  
-  In other words, using SVD gives us a way to find the eigenvalues of $\mathbf{S}$ that does not involve finding its spectral decomposition.
+  3. We can calculate the principal components using the vectors of $\mathbf{U}$ and the matrix $\mathbf{D}$, which is super cool! This is possible because the columns of $\mathbf{U}$ are eigenvectors of the covariance matrix $\mathbf{S}$. Specifically, the $i^{th}$ principal component $p_i$ can be calculated as $p_i = \mathbf{u}_i d_i$, where $\mathbf{u}_i$ is the $i^{th}$ column of $\mathbf{U}$ and $d_i$ is the $i^{th}$ value on the diagonal of $\mathbf{D}$.  
   
 We will put these steps into practice now - if you have saved the fully imputed data set, load it here: 
 
@@ -210,11 +207,13 @@ X <- readRDS(file = "data/fully_imputed_numeric.rds")
 
 Remember, we cannot use the `prcomp()` function on our SNP data set - it is too big. We will need some other tools: 
 
-  - I will use the function `std` from the `ncvreg` package to standardize $\mathbf{X}$
+  - I will use the function `std()` from the `ncvreg` package to standardize $\mathbf{X}$
   
-  - I will use the `svds()` function from the `RSpectra` package do implement the singular value decomposition
+  - I will use the `svds()` function from the `RSpectra` package do implement the singular value decomposition. `RSpectra` will let us use a lower-dimension approximation to the SVD, making it feasible to work with this large data set. 
   
-Since we are usually only interested in the first few PCs, I will calcuate just the first 4 PCs in this example. 
+  - I will use the `sweep()` function in `base` to return an array 
+  
+Since we are usually only interested in the first few PCs, I will calculate just the first 4 PCs in this example. 
 
 
 ```{r pca}
@@ -224,15 +223,16 @@ X_scaled <- ncvreg::std(X)
 rm(X)
 # use singular value decomposition to derive the left singular vectors 
 # NB: on my laptop, this took about 10 minutes to run 
-singular_vectors <- svds(t(X_scaled),
+singular_vectors <- svds(X_scaled,
                          k = 4,
                          nu = 4, # NB: default is nu = k
                          nv = 0)
-# check the dimension of the returned "u" matrix - we should have ncol(u) = k
+# check the dimension of the returned "u" matrix and "d" vector 
 dim(singular_vectors$u) 
+length(singular_vectors$d)
 # calculate the PCs                          
-PCs <- X_scaled %*% singular_vectors$u
-
+PCs <- sweep(singular_vectors$u, 2, singular_vectors$d, "*")
+dim(PCs) # will have same dimensions as u
 ```
 
 ```{r scree}
@@ -285,7 +285,7 @@ PC_dat %>%
 
 ```
 
-Based on the plot above, sex does not seem to be associated with the clustering we see in the principal components.  
+Based on the plot above, sex does not seem to be associated with the clustering we see in the principal components. In this case, we do not have access to further information on the demographics of the patients represented in the study. However, we can conjecture that unknown factors (*e.g.* racial/ethnic group, diet, etc.) likely varied among the study population, as authors reported that these data were collected at several sites in the US as well as in Germany (refer to the citation in the quality control module).
 
 ### PCA for large/not fully imputed data
 
@@ -323,13 +323,13 @@ structure as we saw in the previous example. We don't have a known race or subpo
 
 ```{r pca_SNPRelate}
 # create gds file so we can use SNPRelate - using unimputed qc data
-qc_data.fn <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
+qc_files <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
 
 # IMHO, this next function is poorly named, but it will serve our purposes here... 
-snpgdsBED2GDS(qc_data.fn$bed, qc_data.fn$fam, qc_data.fn$bim, qc_data.fn$gds) 
+snpgdsBED2GDS(qc_files$bed, qc_files$fam, qc_files$bim, qc_files$gds) 
 
 # open the GDS file
-genofile <- snpgdsOpen(qc_data.fn$gds)
+genofile <- snpgdsOpen(qc_files$gds)
 
 # get PCs
 pca <- snpgdsPCA(genofile) 
@@ -348,7 +348,12 @@ pctab <- data.frame(sample.id = pca$sample.id,
 names(pctab)[-1] <- paste0('PC', 1:10)
 
 # plot 
-plot(pctab$PC2, pctab$PC1, xlab="Principal Component 2", ylab="Principal Component 1")
+pctab %>%
+  as_tibble() %>%
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point() + 
+  coord_fixed() + 
+  theme(legend.position = "none")
 ```
 
 
