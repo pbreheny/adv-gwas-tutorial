@@ -223,7 +223,7 @@ X_scaled <- ncvreg::std(X)
 rm(X)
 # use singular value decomposition to derive the left singular vectors 
 # NB: on my laptop, this took about 10 minutes to run 
-singular_vectors <- svds(X_scaled,
+singular_vectors <- RSpectra::svds(X_scaled,
                          k = 4,
                          nu = 4, # NB: default is nu = k
                          nv = 0)
@@ -233,6 +233,18 @@ length(singular_vectors$d)
 # calculate the PCs                          
 PCs <- sweep(singular_vectors$u, 2, singular_vectors$d, "*")
 dim(PCs) # will have same dimensions as u
+```
+
+```{r save_PCs, eval=FALSE}
+# save the PCs and scaled X matrix
+# - will need them for analysis 
+
+saveRDS(X_scaled,
+        file = "data/fully_imputed_scaled.rds")
+
+saveRDS(PCs, 
+        file = "data/PCs_base.rds")
+
 ```
 
 ```{r scree}
@@ -354,6 +366,13 @@ pctab %>%
   geom_point() + 
   coord_fixed() + 
   theme(legend.position = "none")
+```
+
+Since the first four PCs explain most of the variance in the data, let's save these for analysis downstream
+
+```{r save_PCs_SNPRelate}
+saveRDS(pctab %>% dplyr::select(PC1:PC4),
+        "data/PCs_SNPRelate.rds")
 ```
 
 

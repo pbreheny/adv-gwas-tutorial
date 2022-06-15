@@ -1,0 +1,109 @@
+---
+title: 'GWAS tutorial: Snp testing'
+author: Patrick Breheny and Logan Harris
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+**Note**: This page is currently undergoing updates - stay tuned for a finalized version 
+
+```{r knitr_setup, include=FALSE, purl=FALSE}
+library(knitr)
+library(kableExtra)
+set.seed(1)
+knitr::opts_knit$set(aliases=c(h = 'fig.height', w = 'fig.width'))
+knitr::opts_chunk$set(comment="#", message=FALSE, collapse=TRUE, cache=FALSE, tidy=FALSE, fig.align="center")
+knitr::knit_hooks$set(small.mar = function(before, options, envir) {
+  if (before) par(mar = c(4, 4, .1, .1))
+})
+```
+
+# Set up 
+
+In this module, we work through an example of a GWAS analysis using a marginal approach. Our approach is 'marginal' in the sense that we are testing the relationship between the outcome and the genetic data by going one SNP at a time. This is (by far) the most pervasive approach in the existing literature. 
+
+This module does not require that you have worked through the previous modules; however, I use language from the quality control, imputation, and population structure modules throughout my explanation of this marginal approach. 
+
+As always, we begin by loading the libraries with the tools we need for analysis. 
+
+
+```{r setup}
+library(data.table)
+library(magrittr)
+library(qqman)
+library(snpStats)
+library(dplyr)
+```
+
+Next, we load the data. Start by loading the clinical data, as this has the outcome (coronary artery disease ('CAD')) we need for our models. 
+
+```{r load_clinical_dat}
+clinical <- fread("data/GWAStutorial_clinical.csv")
+# str(clinical) # if you need to remind yourself of what is here
+```
+
+Next, we need to load the genetic data. For this section, we will work with the imputed data from the `SNPRelate` package (see module 2)
+  
+```{r load_SNP_dat}
+# load partially imputed data:
+partially_imputed <- readRDS('data/gwas-imp.rds')
+# load the bim file
+bim <- fread('data/GWAStutorial.bim')
+# load the rules used for imputation
+rules <- readRDS("data/rules.rds")
+```
+
+If you completed the population structure module, you should load the principal components as well - we need them for our analysis. If you did not work through the population structure module, you can skip this step.  
+
+```{r load_PC_dat}
+# load principal components 
+PCs <- readRDS(file = "data/PCs_base.rds") %>%
+  as.data.frame()
+
+names(PCs) <- paste0("PC", 1:ncol(PCs))
+
+```
+
+# Implement tests
+
+We begin our analysis with a logistic regression model which uses the predictors sex and age to study the binary outcome CAD. With the function `snp.rhs.tests()`, we will perform a large set of logistic regression tests and save the p-values in a vector called `assoc_p_vals`. In addition to adjusting for sex and age, we will adjust for the first 4 principal components, as per the observations we made about the population structure in our data. 
+
+```{r assoc_test_1}
+
+assoc_test <- snpStats::snp.rhs.tests(
+  clinical$CAD ~ clinical$sex + clinical$age + 
+    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4, 
+  family   = "binomial",
+  data     = partially_imputed$fam,
+  snp.data = partially_imputed$genotypes,
+  rules = rules
+  )
+
+assoc_p_vals <- p.value(assoc_test)
+
+
+```
+
+
+# Visualize results 
+
+
+
+## Using a qqplot
+
+As a first look at our results, we will examine a qq-plot. This plot compares the observed p-values from our SNP tests with the p-values we would expect if there were no associations. To make our qq-plot, we will use the package `qqman`. 
+
+```{r assumption_test}
+qqman::qq(assoc_p_vals_pre)
+```
+
+If the observed p-values follow exactly the distribution we would expect under the global null hypothesis, then all points will be plotted on the red line. 
+
+We notice in this qq-plot that some of the p-values (plotted as points) diverge from the red line to the left. This indicates that some observed values are below what is expected. From a statistical point of view, this is pretty promising. Having some p-values that are smaller than expected indicates that there are likely to be significant results in the data. 
+
+
+
+
+
+# Extensions 
+
+## Implementation using PLINK 
