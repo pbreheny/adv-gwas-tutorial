@@ -1,10 +1,10 @@
 ---
-title: 'GWAS tutorial: Snp testing'
-author: Patrick Breheny and Logan Harris
+title: 'GWAS tutorial: SNP testing (marginal approach)'
+author: Patrick Breheny, Logan Harris, and Tabitha Peter 
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
+editor_options: 
+  chunk_output_type: console
 ---
-
-**Note**: This page is currently undergoing updates - stay tuned for a finalized version 
 
 ```{r knitr_setup, include=FALSE, purl=FALSE}
 library(knitr)
@@ -26,7 +26,7 @@ This module does not require that you have worked through the previous modules; 
 As always, we begin by loading the libraries with the tools we need for analysis. 
 
 
-```{r setup}
+```{r libs, message=FALSE}
 library(data.table)
 library(magrittr)
 library(qqman)
@@ -41,15 +41,13 @@ clinical <- fread("data/GWAStutorial_clinical.csv")
 # str(clinical) # if you need to remind yourself of what is here
 ```
 
-Next, we need to load the genetic data. For this section, we will work with the imputed data from the `SNPRelate` package (see module 2)
+Next, we need to load the genetic data. For this section, we will work with the quality controlled (QC'd) data from the `SNPRelate` package (see module 1). We will also need the ".bim" file from the original data for making plots. 
   
 ```{r load_SNP_dat}
-# load partially imputed data:
-partially_imputed <- readRDS('data/gwas-imp.rds')
+# load QC'd data:
+qc_dat <- readRDS('data/gwas-qc.rds')
 # load the bim file
 bim <- fread('data/GWAStutorial.bim')
-# load the rules used for imputation
-rules <- readRDS("data/rules.rds")
 ```
 
 If you completed the population structure module, you should load the principal components as well - we need them for our analysis. If you did not work through the population structure module, you can skip this step.  
@@ -68,14 +66,13 @@ names(PCs) <- paste0("PC", 1:ncol(PCs))
 We begin our analysis with a logistic regression model which uses the predictors sex and age to study the binary outcome CAD. With the function `snp.rhs.tests()`, we will perform a large set of logistic regression tests and save the p-values in a vector called `assoc_p_vals`. In addition to adjusting for sex and age, we will adjust for the first 4 principal components, as per the observations we made about the population structure in our data. 
 
 ```{r assoc_test_1}
-
 assoc_test <- snpStats::snp.rhs.tests(
-  clinical$CAD ~ clinical$sex + clinical$age + 
-    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4, 
+  formula = clinical$CAD ~ clinical$sex + clinical$age + 
+    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4,
   family   = "binomial",
-  data     = partially_imputed$fam,
-  snp.data = partially_imputed$genotypes,
-  rules = rules
+  link = "logit", # echoes the default settings
+  data = qc_dat$fam,
+  snp.data = qc_dat$genotypes
   )
 
 assoc_p_vals <- p.value(assoc_test)
@@ -83,27 +80,111 @@ assoc_p_vals <- p.value(assoc_test)
 
 ```
 
+Alternatively, one could implement this testing using the imputed data. There is an optional `rules` argument in the `snp.rhs.tests()` function that allows the user to include the rules used for imputation. I will forgo doing this here -- simply want to point out that this approach is possible. 
+
+```{r assoc_test_2, include=FALSE, eval=FALSE}
+# load partially imputed data
+partially_imputed <- readRDS("data/gwas-imp.rds")
+# load imputation rules 
+rules <- readRDS("data/rules.rds")
+
+assoc_test <- snpStats::snp.rhs.tests(
+  formula = clinical$CAD ~ clinical$sex + clinical$age + 
+    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4,
+  family   = "binomial",
+  link = "logit", # echoes the default settings
+  data = partially_imputed$fam,
+  snp.data = partially_imputed$genotypes,
+  rules = rules
+  )
+
+#FIXME: this makes R crash as of June 20, 2022
+
+```
+
 
 # Visualize results 
 
+There are two methods for visualizing the results of a GWAS analysis: **qq plots** and **Manhattan plots**. Both of these tools are meant to highlight the genetic variants (SNPs) with the smallest corresponding p-values. 
 
+Due to their magnitude, p-values from GWAS studies are typically illustrated on the log-transformed scale.  
 
 ## Using a qqplot
 
-As a first look at our results, we will examine a qq-plot. This plot compares the observed p-values from our SNP tests with the p-values we would expect if there were no associations. To make our qq-plot, we will use the package `qqman`. 
+As a first look at our results, we will examine a qq-plot. This plot compares the observed p-values from our SNP tests with the p-values we would expect if there were no associations. To make our qq-plot, we will use the `qq()` function from the package `qqman`. 
 
-```{r assumption_test}
-qqman::qq(assoc_p_vals_pre)
+```{r qq_plot}
+qq_plot <- qqman::qq(assoc_p_vals)
+(qq_plot)
 ```
 
 If the observed p-values follow exactly the distribution we would expect under the global null hypothesis, then all points will be plotted on the red line. 
 
 We notice in this qq-plot that some of the p-values (plotted as points) diverge from the red line to the left. This indicates that some observed values are below what is expected. From a statistical point of view, this is pretty promising. Having some p-values that are smaller than expected indicates that there are likely to be significant results in the data. 
 
+## Using a Manhattan plot 
+
+A [Manhattan plot](https://en.wikipedia.org/wiki/Manhattan_plot) makes the smallest p-values "pop" by plotting all p-values so that the smallest ones are the highest. We can create a Manhattan plot of our results using the `manhattan()` function (from the aforementioned `qqman` package)
+
+```{r manhattan_plot}
+# format data to have readable labels. 
+manh_data <- data.frame(
+    SNP = assoc_test@snp.names, # NB: for S4 objects in R, use the "@" to access items
+    P = assoc_p_vals
+  ) %>%
+  left_join(bim, by = c("SNP" = "V2")) %>%
+  rename(
+    CHR = V1, 
+    BP = V4
+  ) # recall that 'bim' files have a standardized format, so the column order is 
+# always the same 
+
+manh_plot <- manhattan(manh_data, ylim = c(0, 20))
+(unlist(manh_plot))
+```
+
+Here, the x-axis of the plot is divided into "bins", where each bin represents a chromosome. The y axis shows the negative, log-transformed p-values. Each of the p-values from our analysis is plotted in the bin corresponding to the chromosome of the gene in that particular test, and the height of the point directly correlates with the significance of the test.
+
+The goal of Manhattan plots are to help identify SNPs (or a region of SNPs) that are associated with a phenotype of interest. The blue and red lines represent values for $-\text{log}_{10}$ transformed p-values at two specified thresholds of "significance." When we do have SNPs with a p-value that exceeds these lines, we are often interested in the one that is the highest in a given region.
+
+I could improve the Manhattan plot above by adding annotations which indicate the SNPs with the smallest p-values: 
+
+```{r manh2}
+
+# NB:  5 × 10e−8 is a common threshold for significance in GWAS studies, 
+#   whereas 5 x 10e-6 is a common threshold for "suggestive" results
+# signif_threshold <- 5e-8 # this would be a more stringent alternative 
+suggest_threshold <- 5e-6 
+manh2 <- manhattan(manh_data, ylim = c(0, 10), annotatePval = suggest_threshold)
+
+(unlist(manh2))
+```
+
+Based on the Manhattan plots, one region of interest could be around rs9632884 on Chromosome 9 - this SNP is above the suggestive threshold (indicated by the blue line), and there are a lot of other notable results clustered near this SNP. If I wanted to highlight a region of interest, I could do this to highlight the specific genes in this region, or [locus](https://www.genome.gov/genetics-glossary/Locus). This will also allow us to practice the final piece of functionality from `qqman`:
+
+```{r manh3}
+bp_center <- manh_data %>% # NB: 'bp' stands for 'base pair'
+  filter(SNP == "rs9632884") %>%
+  pull(BP)
+
+bp_range <- c(-1, 1) * 100000 + bp_center
+
+snps_highlight <- manh_data %>%
+  filter(BP >= bp_range[1], BP <= bp_range[2], CHR == 9) %>%
+  pull(SNP)
+
+manh3 <- manhattan(
+  manh_data, 
+  ylim = c(0, 10), 
+  annotatePval = .000005, 
+  highlight = snps_highlight
+)
+
+(unlist(manh3))
+```
 
 
 
+# Implementation using PLINK software 
 
-# Extensions 
-
-## Implementation using PLINK 
+The above is a simple outline of tools for summarizing GWAS results in `R`. There are other tools available for implementing GWAS analyses - one popular software is called `PLINK`. The [PLINK](https://zzz.bwh.harvard.edu/plink/) software is made up of command line programs that implement a wide array of GWAS (and whole genome) analyses. [This tutorial](https://genomicsbootcamp.github.io/book/your-first-plink-tutorial.html) provides a place to begin for new PLINK users, and [this other tutorial](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6001694/) is well-known and more comprehensive. 

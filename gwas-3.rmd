@@ -2,6 +2,8 @@
 title: 'GWAS tutorial: Snp testing'
 author: Patrick Breheny and Logan Harris
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
+editor_options: 
+  chunk_output_type: console
 ---
 
 **Note**: This page is currently undergoing updates - stay tuned for a finalized version 

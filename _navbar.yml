@@ -12,7 +12,11 @@ left:
     - text: "Population Structure"
       href: population_structure.html
     - text: "Analysis"
-      href: gwas-3.html # needs to be updated
+      menu:
+      - text: "Marginal analysis"
+        href: marginal_analysis.html 
+      - text: "Joint analysis"
+        href: joint_analysis.html
     - text: "PostGWAS"
       href: gwas-4.html # needs to be updated 
 right:

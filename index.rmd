@@ -38,7 +38,7 @@ Imputation describes the process of handling missing data by replacing missing v
 
 Population structure helps us take into account possible confounding factors (such as familial relationships) that may exist in our data set. If we do not adjust for them explicitly, such confounding factors could incorrectly inflate results and make our inferences biased.
 
-## [SNP Testing](gwas-3.html)
+## [SNP Test](docs/marginal_analysis.html)
 
 SNP testing gets down the results which are the "featured presentation": associated loci for our phenotypes of interest. This is straightforward if we complete the prior two sections correctly.
 
