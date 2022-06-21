@@ -38,9 +38,13 @@ Imputation describes the process of handling missing data by replacing missing v
 
 Population structure helps us take into account possible confounding factors (such as familial relationships) that may exist in our data set. If we do not adjust for them explicitly, such confounding factors could incorrectly inflate results and make our inferences biased.
 
-## [SNP Test](docs/marginal_analysis.html)
+## [SNP Testing - marginal approach](marginal_analysis.html)
 
-SNP testing gets down the results which are the "featured presentation": associated loci for our phenotypes of interest. This is straightforward if we complete the prior two sections correctly.
+SNP testing gets down the results which are the "featured presentation": associated loci for our phenotypes of interest. This approach examines associations between the outcome and a single SNP (a "one SNP at a time" approach). 
+
+## [SNP Testing - joint approach](joint_analysis.html)
+
+It is often of interest to consider more complex relationships between SNPs and a clinical outcome (phenotype). This section outlines a regression approach, allowing us to consider associations with multiple SNPs. 
 
 ## [Post Analysis](gwas-4.html)
 
