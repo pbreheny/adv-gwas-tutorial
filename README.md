@@ -12,19 +12,13 @@ html::render_all(list.files(".", "*.rmd"))'
 
 The rendered files will appear in the `docs` folder.
 
-Alternatively, you can clone the pre-rendered pages using
-
-```
-git clone --branch gh-pages https://github.com/pbreheny/adv-gwas-tutorial.git _site
-```
-
-And then build an individual page with
+Alternatively, you can render an individual page with
 
 ```r
-html::render_page('page.rmd', web=TRUE)
+html::render_page('page.rmd')
 ```
 
-This is often useful as it can take a long time to execute the entire tutorial.
+This is often useful as it can take a long time to render the entire tutorial.
 
 ## Pushing
 
