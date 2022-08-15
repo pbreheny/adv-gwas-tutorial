@@ -17,4 +17,68 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
-The objective of this module is to test for significant SNPs using a joint approach. 
+The objective of this module is to test for significant SNPs using a joint approach. For this, we will use the `penalizedLMM` R package, which is available [on GitHub](https://github.com/areisett/penalizedLMM). Once again, we will begin by loading the necessary libraries: 
+
+```{r libs, message=FALSE}
+library(data.table)
+library(magrittr)
+library(qqman)
+library(snpStats)
+library(dplyr)
+
+# devtools::install_github("areisett/penalizedLMM")
+library(penalizedLMM)
+```
+
+Next, we load the data. Start by loading the clinical data, as this has the outcome (coronary artery disease ('CAD')) we need for our models. 
+
+```{r load_clinical_dat}
+clinical <- fread("data/GWAStutorial_clinical.csv")
+# str(clinical) # if you need to remind yourself of what is here
+```
+
+We also need to load the genetic data. For this section, we will work with the quality controlled (QC'd) data from the `SNPRelate` package (see module 1). We will also need the ".bim" file from the original data for making plots. Finally, we need our design matrix $X$ with no missing values (this is the $X$ we obtained by our imputation procedures). 
+  
+```{r load_SNP_dat}
+# load QC'd data:
+qc_dat <- readRDS('data/gwas-qc.rds')
+# load the bim file
+bim <- fread('data/GWAStutorial.bim')
+# load design matrix of SNP data (you would need to complete the imputation module first)
+X <- readRDS(file = "data/fully_imputed_numeric.rds")
+```
+
+
+
+If you completed the population structure module, you should load the principal components as well - we need them for our analysis. If you did not work through the population structure module, you can skip this step.  
+
+```{r load_PC_dat}
+# load principal components 
+PCs <- readRDS(file = "data/PCs_base.rds") %>%
+  as.data.frame()
+
+names(PCs) <- paste0("PC", 1:ncol(PCs))
+
+```
+
+
+# Constructing the model 
+
+```{r plmm, eval=FALSE}
+# the CAD outcome is binary (0/1), so it may not be the best place to begin for the 
+#   joint model example 
+joint_model <- plmm(X = X,
+                    y = clinical$CAD,
+                    intercept = FALSE)
+
+```
+
+
+
+# Examining the results 
+
+# Comparing the results of the marginal and joint approaches
+
+
+
+

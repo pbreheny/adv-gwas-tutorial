@@ -139,7 +139,7 @@ manh_data <- data.frame(
   ) # recall that 'bim' files have a standardized format, so the column order is 
 # always the same 
 
-manh_plot <- manhattan(manh_data, ylim = c(0, 20))
+manh_plot <- manhattan(manh_data, ylim = c(0, 8))
 (unlist(manh_plot))
 ```
 
@@ -155,7 +155,7 @@ I could improve the Manhattan plot above by adding annotations which indicate th
 #   whereas 5 x 10e-6 is a common threshold for "suggestive" results
 # signif_threshold <- 5e-8 # this would be a more stringent alternative 
 suggest_threshold <- 5e-6 
-manh2 <- manhattan(manh_data, ylim = c(0, 10), annotatePval = suggest_threshold)
+manh2 <- manhattan(manh_data, ylim = c(0, 8), annotatePval = suggest_threshold)
 
 (unlist(manh2))
 ```

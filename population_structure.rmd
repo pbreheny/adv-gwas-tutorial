@@ -376,10 +376,6 @@ saveRDS(pctab %>% dplyr::select(PC1:PC4),
 ```
 
 
-# Acknowledgements 
-
-I want to thank Prof. Brian Smith - my brief explanation of principal component analysis (including all my notation) is based on his PCA lecture in his Machine Learning course (Spring 2022). If you are interested in doing more with machine learning, I highly recommend [his R package](https://github.com/brian-j-smith/MachineShop) `MachineShop`.  
-
 
 
 
