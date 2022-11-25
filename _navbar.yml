@@ -18,7 +18,7 @@ left:
       - text: "Joint analysis"
         href: joint_analysis.html
     - text: "PostGWAS"
-      href: gwas-4.html # needs to be updated 
+      href: post_gwas.html # needs to be updated 
 right:
     github:
       icon: fa-github fa-lg

@@ -19,37 +19,38 @@ library(data.table)
 library(magrittr)
 ```
 
-Throughout, I'm going to use the `data.table` package to read in and work with data frames; feel free to use something else.  With one exception, the files are just white space delimited text files, anything can open them.
-
-**IN PROGRESS**
+Throughout, I'm going to use the `data.table` package to read in and work with data frames; feel free to use something else. With one exception, the files are just white space delimited text files, anything can open them.
 
 # Getting the data
 
-We will be using publicly available GWAS data from the PennCATH study of genetic risk factors for coronary artery disease.
+This tutorial will use data from the PennCATH study of genetic risk factors for coronary artery disease. Download the data from one of the following sources (the contents are the same):
+
+- [Data (zip)](https://d1d95ugxcvloeo.cloudfront.net/penncath.zip): Windows
+- [Data (tar)](https://d1d95ugxcvloeo.cloudfront.net/penncath.tar.gz): Mac/Linux
+
+Download and unzip/untar the data; you can read the paper as well if you wish:
 
 * [Paper](http://www.ncbi.nlm.nih.gov/pubmed/21239051)
 
-* [Data (zip)](https://www.mtholyoke.edu/courses/afoulkes/Data/GWAStutorial/GWASTutorial_Files.zip)
-
-Download and unzip the data; you can read the paper as well if you wish.  In what follows, I will assume that the unzipped data files are in a folder called `data`; if you store them somewhere else, change the directory references.
+In what follows, I will assume that the unzipped data files are in a folder called `data`; if you store them somewhere else, change the directory references.
 
 # File formats
 
-The data are given in "PLINK" format, which is the most common format for chip-based GWAS data (as of this writing!).  `PLINK` is an open-source whole genome association analysis toolset designed to perform a range of basic large-scale analyses in a computationally efficient manner.  It is worth knowing how to use PLINK, although you can also do most of these things in R.
+The data are given in "PLINK" format, which is the most common format for chip-based GWAS data (as of this writing!). `PLINK` is an open-source whole genome association analysis toolset designed to perform a range of basic large-scale analyses in a computationally efficient manner. It is worth knowing how to use PLINK, although you can also do most of these things in R.
 
 I'll discuss PLINK the software program later on; for now, I'll just describe the organization of its files.
 
-Among the zipped files are three that are necessary to perform a GWAS, the `.bed`, `.bim`, and `.fam` files.  
+Among the zipped files are three that are necessary to perform a GWAS, the `.bed`, `.bim`, and `.fam` files.
 
 ## `.fam`
 
 This contains information on the subjects:
 
 ```{r fam}
-(fam <- fread('data/GWAStutorial.fam'))
+(fam <- fread('data/penncath.fam'))
 ```
 
-There are 1401 rows, one for each subject.  The six colums are:
+There are 1401 rows, one for each subject. The six colums are:
 
 1. Family ID
 2. Individual ID
@@ -58,12 +59,12 @@ There are 1401 rows, one for each subject.  The six colums are:
 5. Sex (1=male; 2=female; other=unknown)
 6. Phenotype
 
-In this data set, columns 2-4 are unimportant.  In general, they are used to specify pedigrees (e.g., subject 3 is the daughter of subjects 1 and 2).  In this study, however, none of the subjects are related, so the only column that is important is the first, which records the subject's unique ID.
+In this data set, columns 2-4 are unimportant. In general, they are used to specify pedigrees (e.g., subject 3 is the daughter of subjects 1 and 2). In this study, however, none of the subjects are related, so the only column that is important is the first, which records the subject's unique ID.
 
 Phenotype is typically used to record case-control status or something like that, but it is also quite common to just record clinical/biological information in a separate spreadsheet, which is what was done here.
 
 ```{r clinical}
-(clinical <- fread('data/GWAStutorial_clinical.csv'))
+(clinical <- fread('data/penncath.csv'))
 ```
 
 As you can see, we've got the `FamID` to match this spreadsheet up with the genetic data, the disease status (`CAD=1` means that the subject has coronary artery disease), and some covariates (age, triglycerides, HDL and LDL cholesterol levels).
@@ -73,10 +74,10 @@ As you can see, we've got the `FamID` to match this spreadsheet up with the gene
 The `.bim` file, by contrast, contains information on the genetic loci (SNPs):
 
 ```{r bim}
-(bim <- fread('data/GWAStutorial.bim'))
+(bim <- fread('data/penncath.bim'))
 ```
 
-As you can see, we have `r nrow(bim)` rows here, one for each SNP measured in the study.  The columns are:
+As you can see, we have `r nrow(bim)` rows here, one for each SNP measured in the study. The columns are:
 
 1. chromosome (1-22, X, Y or 0 if unplaced)
 2. rs# or snp identifier
@@ -91,15 +92,15 @@ So, for example, the file tells us that genetic locus rs12565286 is located 7212
 
 ## `.bed`
 
-Finally, the `.bed` file, which has all the data.  This is by far the largest of the three files, as it contains the entire `r nrow(fam)` by `r nrow(bim)` matrix of genotype calls for every subject and every locus.  To keep things manageable, this file is encoded in a special binary format -- i.e., you can't just read it in through normal means.
+Finally, the `.bed` file, which has all the data. This is by far the largest of the three files, as it contains the entire `r nrow(fam)` by `r nrow(bim)` matrix of genotype calls for every subject and every locus. To keep things manageable, this file is encoded in a special binary format -- i.e., you can't just read it in through normal means.
 
-To access it, you'll have to use specialized applications.  I'll discuss two, an R package called `snpStats` and a command-line interface (CLI) called PLINK.
+To access it, you'll have to use specialized applications. I'll discuss two, an R package called `snpStats` and a command-line interface (CLI) called PLINK.
 
 # Software
 
 ## snpStats
 
-This is a Bioconductor package.  So, you'll have to install it via `BiocManager`
+This is a Bioconductor package. So, you'll have to install it via `BiocManager`
 
 ```{r}
 # install.packages('BiocManager')
@@ -110,18 +111,18 @@ library(snpStats)
 To read in data, there is the `read.plink()` function:
 
 ```{r read-plink}
-obj <- read.plink('data/GWAStutorial')
+obj <- read.plink('data/penncath')
 ```
 
-The function assumes that all the files have the same base filename, and differ only in their extension.  If this is not the case, then you need to specify the filenames for the `.bed`, `.bim`, and `.fam` files separately.
+The function assumes that all the files have the same base filename, and differ only in their extension. If this is not the case, then you need to specify the filenames for the `.bed`, `.bim`, and `.fam` files separately.
 
-From here, `snpStats` has a lot of functions.  For example, here's a plot (there are 1401 points, one for each subject) of whether the call rate (% of genotype calls that are non-missing) is related to the heterozygosity rate (% of loci that are called AB, as opposed to AA or BB):
+From here, `snpStats` has a lot of functions. For example, here's a plot (there are 1401 points, one for each subject) of whether the call rate (% of genotype calls that are non-missing) is related to the heterozygosity rate (% of loci that are called AB, as opposed to AA or BB):
 
 ```{r snp-summary}
 plot(row.summary(obj$genotypes)[c(1,3)])
 ```
 
-Feel free to read the `snpStats` documentation and explore for yourself, but one standard thing that one is always interested in is to simply convert various SNPs to a regular numeric matrix so that you can analyze them using standard R tools.  For example, let's do a Fisher's exact test to see whether CAD is associated with SNP 143:
+Feel free to read the `snpStats` documentation and explore for yourself, but one standard thing that one is always interested in is to simply convert various SNPs to a regular numeric matrix so that you can analyze them using standard R tools. For example, let's do a Fisher's exact test to see whether CAD is associated with SNP 143:
 
 ```{r convert-numeric}
 x <- as(obj$genotypes[,143], 'numeric')
@@ -130,7 +131,7 @@ fisher.test(drop(x), clinical$CAD)
 
 A GWAS is then basically just a big loop where we repeat this analysis for every single SNP (although there are of course statistical issues that come up in doing so).
 
-Side note: In general, code like the above is risky, as it assumes that the clinical spreadsheet is in the same order as the `.fam` and `.bed` files.  This happens to be the case here:
+Side note: In general, code like the above is risky, as it assumes that the clinical spreadsheet is in the same order as the `.fam` and `.bed` files. This happens to be the case here:
 
 
 ```{r check}
@@ -149,7 +150,7 @@ I'll write more for next week....
 
 ## PLINK
 
-NOTE: This is incomplete.  Hopefully I'll add to it later, but in the meantime, I'm just pointing you to the (rather good) PLINK documentation and hoping you can figure things out on your own!
+NOTE: This is incomplete. Hopefully I'll add to it later, but in the meantime, I'm just pointing you to the (rather good) PLINK documentation and hoping you can figure things out on your own!
 
 There are three versions of PLINK (in order from old-and-stable to new-and-fast-but-sometimes-slightly-incomplete):
 
@@ -159,11 +160,11 @@ There are three versions of PLINK (in order from old-and-stable to new-and-fast-
 
 * [PLINK Homepage (2.0)](https://www.cog-genomics.org/plink2.0)
 
-As an independent learning assignment, it would be good to familiarize yourself with how PLINK works and to carry out some of the same analyses in R and PLINK.  In particular, there are a few things that I think are easier in PLINK than R (or maybe they exist in some package I'm not aware of), so a useful skill is to be able to do some analysis in PLINK but then read that data back into R and merge it in with the rest of an analysis.
+As an independent learning assignment, it would be good to familiarize yourself with how PLINK works and to carry out some of the same analyses in R and PLINK. In particular, there are a few things that I think are easier in PLINK than R (or maybe they exist in some package I'm not aware of), so a useful skill is to be able to do some analysis in PLINK but then read that data back into R and merge it in with the rest of an analysis.
 
 # Quality control
 
-The first step in any GWAS is to examine the data for potential problems.  You don't want to carry out a GWAS, think you have an exciting result, then discover that it was all just an artifact of bad data.  This is a fairly "clean" data set, so it's not really ideal for showing these steps, but I'll go through them anyway.  There is also a sample data set in the `snpStats` package with some (at least one) bad samples; might be worth checking that one out as well.
+The first step in any GWAS is to examine the data for potential problems. You don't want to carry out a GWAS, think you have an exciting result, then discover that it was all just an artifact of bad data. This is a fairly "clean" data set, so it's not really ideal for showing these steps, but I'll go through them anyway. There is also a sample data set in the `snpStats` package with some (at least one) bad samples; might be worth checking that one out as well.
 
 ```{r snpstats-data}
 data(for.exercise)
@@ -193,22 +194,22 @@ This isn't exactly a QC step, but extremely helpful to do as a first step when g
 table(obj$map$chromosome)
 ```
 
-For the most part, the chromosomes are ordered by size, so chromosomes 1 and 2 are much bigger than (and have many more SNPs than) chromosomes 21 and 22.  This particular data set only contains SNPs from the "autosomal" chromosomes (1-22); we do not have any data on X and Y chromosomes.  Also, there are no "strange" chromosomes, such as MT (the mitochondrial chromosome), XY (the pseudo-autosomal region of chromosome X), and 0 (SNPs that cannot be mapped to any chromosomes, which can happen for a variety of reasons).  Depending on the scientific goal, we may wish to subset our analysis down to include only the autosomal chromosomes, although this isn't necessary here since it has already been done.
+For the most part, the chromosomes are ordered by size, so chromosomes 1 and 2 are much bigger than (and have many more SNPs than) chromosomes 21 and 22. This particular data set only contains SNPs from the "autosomal" chromosomes (1-22); we do not have any data on X and Y chromosomes. Also, there are no "strange" chromosomes, such as MT (the mitochondrial chromosome), XY (the pseudo-autosomal region of chromosome X), and 0 (SNPs that cannot be mapped to any chromosomes, which can happen for a variety of reasons). Depending on the scientific goal, we may wish to subset our analysis down to include only the autosomal chromosomes, although this isn't necessary here since it has already been done.
 
 ## Missing data
 
-Any SNP with a lot of missing data is probably questionable; these SNPs are often excluded from analysis (although we will talk about other approaches later).  Likewise, any sample with lots of missing data suggests that there may be issues with the processing of that sample.
+Any SNP with a lot of missing data is probably questionable; these SNPs are often excluded from analysis (although we will talk about other approaches later). Likewise, any sample with lots of missing data suggests that there may be issues with the processing of that sample.
 
 ```{r miss, h=4, w=4, out.width='50%', fig.align='default', fig.show='hold'}
 ggbox(rs$Call.rate, 'Individuals', 'Call rate')
 ggbox(cs$Call.rate, 'SNPs', 'Call rate')
 ```
 
-Individuals look good -- SNPs, on the other hand, there are definitely some SNPs with lots of missing values.  A common practice is to exclude SNPs with >5% or >10% missing data.  We'll actually do the subsetting a little later, right now we're just exploring.
+Individuals look good -- SNPs, on the other hand, there are definitely some SNPs with lots of missing values. A common practice is to exclude SNPs with >5% or >10% missing data. We'll actually do the subsetting a little later, right now we're just exploring.
 
 ## Minor allele frequency
 
-Minor allele frequency is the percent of alleles that belong to less common category.  For example:
+Minor allele frequency is the percent of alleles that belong to less common category. For example:
 
 ```{r maf-example}
 (Tab <- table(as(obj$genotypes[,143], 'numeric')))
@@ -216,12 +217,12 @@ Minor allele frequency is the percent of alleles that belong to less common cate
 cs[143,]$MAF
 ```
 
-Excluding SNPs on the basis of minor allele frequency is a bit controversial.  It's done, and it makes sense, but has nothing to do with quality control -- there is no reason to think there are any errors in the data.  The main justification is statistical:
+Excluding SNPs on the basis of minor allele frequency is a bit controversial. It's done, and it makes sense, but has nothing to do with quality control -- there is no reason to think there are any errors in the data. The main justification is statistical:
 
 * If MAF is low, power is low (i.e., don't spend multiple testing corrections on tests that are unlikely to find anything anyway)
 * Some statistical methods perform badly with low MAF (e.g., the $chi^2$-test)
 
-An appropriate cutoff definitely depends on sample size -- the larger the sample, the greater your ability to include rare SNPs.  Let's look at the distributon of MAFs:
+An appropriate cutoff definitely depends on sample size -- the larger the sample, the greater your ability to include rare SNPs. Let's look at the distributon of MAFs:
 
 ```{r maf}
 hist(cs$MAF, breaks=seq(0, 0.5, 0.01), border='white', col='gray', las=1)
@@ -236,7 +237,7 @@ table(cs$MAF < 0.001)
 table(as(obj$genotypes[,62], 'numeric'))
 ```
 
-Finally, it is worth noting that no matter what the sample size, monomorphic SNPs (i.e., SNPs that show no genetic variation whatsoever in the sample) are usually problematic and should always be removed.  Some code crashes when monomorphic SNPs are included; even if this weren't the case, these SNPs cannot possibly be informative in a genome-wide association study.
+Finally, it is worth noting that no matter what the sample size, monomorphic SNPs (i.e., SNPs that show no genetic variation whatsoever in the sample) are usually problematic and should always be removed. Some code crashes when monomorphic SNPs are included; even if this weren't the case, these SNPs cannot possibly be informative in a genome-wide association study.
 
 ```{r monomorph}
 table(cs$MAF == 0)                 # >26000 monomorphic SNPs
@@ -245,11 +246,11 @@ obj$map[head(which(cs$MAF==0)),]   # Note that "allele.1' is missing for these S
 
 ## Sex check
 
-In general, since we have genetic data on the individuals in the sample, including the X chromosome, we can determine (or at least, estimate) their "genetic sex" and compare that to the sex that is recorded in their clinical information.  A discrepancy is very troubling, as it may be the result of a sample being switched or mis-labeled (there are other explanations as well).
+In general, since we have genetic data on the individuals in the sample, including the X chromosome, we can determine (or at least, estimate) their "genetic sex" and compare that to the sex that is recorded in their clinical information. A discrepancy is very troubling, as it may be the result of a sample being switched or mis-labeled (there are other explanations as well).
 
-Unfortunately, this data set does not include the X chromosome, so we can't show that step here.  Need to think of a better way to handle this....
+Unfortunately, this data set does not include the X chromosome, so we can't show that step here.
 
-In general, though, you have to use PLINK for this.  The relevant command is called `--check-sex`.  The relevant documentation: [1.9 documentation](https://www.cog-genomics.org/plink/1.9/basic_stats#check_sex).
+In general, though, one usually uses PLINK for this. The relevant command is called `--check-sex`. The relevant documentation: [1.9 documentation](https://www.cog-genomics.org/plink/1.9/basic_stats#check_sex).
 
 Note that there are no discrepancies between the sex recorded in `clinical.csv` and the one recorded in the `.fam` file:
 
@@ -259,12 +260,12 @@ table(obj$fam$sex, clinical$sex)
 
 ## Hardy-Weinberg equilibrium
 
-The [Hardy-Weinberg principle](https://en.wikipedia.org/wiki/Hardy-Weinberg_principle) states that under the assumption of random mating, the distribution of genotypes should follow a binomial distribution with probability $\pi$ equal to the MAF.  If this doesn't happen, this is an indication that either:
+The [Hardy-Weinberg principle](https://en.wikipedia.org/wiki/Hardy-Weinberg_principle) states that under the assumption of random mating, the distribution of genotypes should follow a binomial distribution with probability $\pi$ equal to the MAF. If this doesn't happen, this is an indication that either:
 
 1. There was a genotyping error for this SNP, or
 2. Mating is not random
 
-In the real world, mating is of course not random, making it difficult to exclude SNPs on the basis of HWE.  The usual recommendation is to exclude a SNP only if HWE is hugely violated (e.g., $p < 10^{-10}$ for a test of whether the data follow a binomial distribution).
+In the real world, mating is of course not random, making it difficult to exclude SNPs on the basis of HWE. The usual recommendation is to exclude a SNP only if HWE is hugely violated (e.g., $p < 10^{-10}$ for a test of whether the data follow a binomial distribution).
 
 ```{r hwe}
 ggbox(cs$z.HWE)  # Mostly near zero, but some huge outliers
@@ -287,11 +288,11 @@ No big outliers here, though.
 
 ## Relatedness
 
-Another common QC check that people apply is to see whether anyone in their data set is related to each other (i.e., their genomes are far more similar than the genomes of two unrelated people).  This makes sense, as most statistical methods assume independent samples and if you have, say, two sisters in the analysis, they're not really independent.  However, the tools for assessing relatedness are related to methods for assessing population structure, which is a complex topic that I'll discuss in the 'structure' module of the tutorial.
+Another common QC check that people apply is to see whether anyone in their data set is related to each other (i.e., their genomes are far more similar than the genomes of two unrelated people). This makes sense, as most statistical methods assume independent samples and if you have, say, two sisters in the analysis, they're not really independent. However, the tools for assessing relatedness are related to methods for assessing population structure, which is a complex topic that I'll discuss in the 'structure' module of the tutorial.
 
 ## Pipeline
 
-OK, now that we've surveyed all these QC concepts, let's actually do some filtering.  I might choose to do something like this:
+OK, now that we've surveyed all these QC concepts, let's actually do some filtering. I might choose to do something like this:
 
 ```{r qc-pipe}
 keep <- cs$MAF > 0.001 &
@@ -302,14 +303,14 @@ table(keep)
 
 So, we're getting rid of about 100,000 SNPs and keeping about 750,000.
 
-Now, let's actually do the subsetting.  **IMPORTANT:** The key thing to remember here is that you need to subset both the `map` object and the genotypes -- if you don't, these objects will no longer match and you will end up with a devastating row mismatch problem.
+Now, let's actually do the subsetting. **IMPORTANT:** The key thing to remember here is that you need to subset both the `map` object and the genotypes -- if you don't, these objects will no longer match and you will end up with a devastating row mismatch problem.
 
 ```{r subset-1}
 (obj$genotypes <- obj$genotypes[, keep])
 obj$map <- obj$map[keep, ]
 ```
 
-In principle, we might also be throwing some subjects out at this point, but in this particular example, none of the subjects looked questionable.  Again, if throwing away subjects, you need to remember to also subset the `fam` object and the clinical data table.
+In principle, we might also be throwing some subjects out at this point, but in this particular example, none of the subjects looked questionable. Again, if throwing away subjects, you need to remember to also subset the `fam` object and the clinical data table.
 
 Let's save this QC'd data set for future use in downstream analyses:
 
