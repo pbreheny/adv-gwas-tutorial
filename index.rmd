@@ -38,14 +38,13 @@ Imputation describes the process of handling missing data by replacing missing v
 
 Population structure helps us take into account possible confounding factors (such as familial relationships) that may exist in our data set. If we do not adjust for them explicitly, such confounding factors could incorrectly inflate results and make our inferences biased.
 
-## [SNP Testing - marginal approach](marginal_analysis.html)
+## [Analyzing association]
 
-SNP testing gets down the results which are the "featured presentation": associated loci for our phenotypes of interest. This approach examines associations between the outcome and a single SNP (a "one SNP at a time" approach). 
+As the name would imply, analyzing associations between SNPs and phenotypes is the primary purpose of a GWAS. We divide this material up into two sections, one which considers each SNP in isolation and the other which considers all SNPs jointly:
 
-## [SNP Testing - joint approach](joint_analysis.html)
+- [Marginal](marginal_analysis.html)
+- [Joint / simultaneous](joint_analysis.html)
 
-It is often of interest to consider more complex relationships between SNPs and a clinical outcome (phenotype). This section outlines a regression approach, allowing us to consider associations with multiple SNPs. 
-
-## [Post Analysis](gwas-4.html)
+## [Post Analysis](post_gwas.html)
 
 Finally, we attempt to take the results and turn them into something clinically meaningful. For instance, I could tell you some SNP, but it will have no mean to you unless you have spent time studying it. On the other hand, if I tell you that a variant of a SNP is associated with improper functioning of chloride channels, that will have a great deal more significance. 
