@@ -281,7 +281,7 @@ Similar to examining racial group in our example PCA, we can use the clinical fe
 
 ```{r load_clinical}
 # load our clinical data 
-clinical <- fread('data/GWAStutorial_clinical.csv') %>%
+clinical <- fread('data/penncath.csv') %>%
   mutate(across(.cols = c(sex, CAD),
                 .fns = as.factor))
 # remind ourselves of what clinical/demographic information we have 

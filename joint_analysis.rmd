@@ -33,7 +33,7 @@ library(penalizedLMM)
 Next, we load the data. Start by loading the clinical data, as this has the outcome (coronary artery disease ('CAD')) we need for our models. 
 
 ```{r load_clinical_dat}
-clinical <- fread("data/GWAStutorial_clinical.csv")
+clinical <- fread("data/penncath.csv")
 # str(clinical) # if you need to remind yourself of what is here
 ```
 
@@ -43,7 +43,7 @@ We also need to load the genetic data. For this section, we will work with the q
 # load QC'd data:
 qc_dat <- readRDS('data/gwas-qc.rds')
 # load the bim file
-bim <- fread('data/GWAStutorial.bim')
+bim <- fread('data/penncath.bim')
 # load design matrix of SNP data (you would need to complete the imputation module first)
 X <- readRDS(file = "data/fully_imputed_numeric.rds")
 ```
