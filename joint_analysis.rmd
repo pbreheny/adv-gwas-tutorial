@@ -41,11 +41,11 @@ We also need to load the genetic data. For this section, we will work with the q
   
 ```{r load_SNP_dat}
 # load QC'd data:
-qc_dat <- readRDS('data/gwas-qc.rds')
+qc_dat <- readRDS('rds/gwas-qc.rds')
 # load the bim file
 bim <- fread('data/penncath.bim')
 # load design matrix of SNP data (you would need to complete the imputation module first)
-X <- readRDS(file = "data/fully_imputed_numeric.rds")
+X <- readRDS(file = "rds/fully_imputed_numeric.rds")
 ```
 
 
@@ -54,7 +54,7 @@ If you completed the population structure module, you should load the principal 
 
 ```{r load_PC_dat}
 # load principal components 
-PCs <- readRDS(file = "data/PCs_base.rds") %>%
+PCs <- readRDS(file = "rds/PCs_base.rds") %>%
   as.data.frame()
 
 names(PCs) <- paste0("PC", 1:ncol(PCs))
@@ -64,12 +64,28 @@ names(PCs) <- paste0("PC", 1:ncol(PCs))
 
 # Constructing the model 
 
-```{r plmm, eval=FALSE}
-# the CAD outcome is binary (0/1), so it may not be the best place to begin for the 
-#   joint model example 
+For the joint analysis approach, we will consider `hdl` as the outcome. At this time, the functions in `penalizedLMM` are limited to continuous (i.e. numeric) outcomes -- we hope to expand the functionality of this package to generalized modeling in the near future. 
+
+First, we will impute the `r sum(is.na(clinical$hdl))` missing values in `hdl` using the mean. While this may be simplistic, this approach is sufficient for illustrating the joint analysis technique. 
+
+
+```{r hdl}
+clinical$hdl_impute <- ifelse(is.na(clinical$hdl),
+                                  mean(clinical$hdl, na.rm = T),
+                                  clinical$hdl)
+```
+
+
+Now, we will construct a penalized linear mixed model using the MCP penalty (the default in `plmm`). The `k` argument allows us to use a singular value decomposition approach that decreases computational time. For more details, refer to the `penalizedLMM::plmm()` documentation.
+
+```{r plmm}
 joint_model <- plmm(X = X,
-                    y = clinical$CAD,
-                    intercept = FALSE)
+                    y = clinical$hdl_impute,
+                    k = 4)
+
+# by default, our PLMM will evaluate 100 lambda values
+# we can summarize the fit of this model at the 50th lambda value:
+print(summary(joint_model, idx = 50))
 
 ```
 
@@ -77,7 +93,7 @@ joint_model <- plmm(X = X,
 
 # Examining the results 
 
-# Comparing the results of the marginal and joint approaches
+This section is under development
 
 
 
