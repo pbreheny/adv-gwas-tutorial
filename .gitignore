@@ -4,9 +4,11 @@
 .RData
 .Ruserdata
 data/
+rds/
 _R
 inst/
 plink.exe
 magma
 annovar
 .DS_Store
+rules_imputed_numeric.R
