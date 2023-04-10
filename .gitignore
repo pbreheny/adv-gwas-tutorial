@@ -3,7 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
-data/
+data
 rds/
 _R
 inst/
