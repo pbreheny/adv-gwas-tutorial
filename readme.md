@@ -1,6 +1,20 @@
 # Self-guided GWAS tutorial
 
-Very much a work in progress. Uses the package [html](https://github.com/pbreheny/html) for rendering.
+This self-guided tutorial walks a beginner through a GWAS analysis, covering topics including: 
+
+- Quality control 
+
+- Imputation 
+
+- Population structure 
+
+- Marginal analysis 
+
+- Joint analysis 
+
+Very much a work in progress. In particular, we are in the process of a major update to our pages. The analysis pages in particular are 'under construction' -- if you notice something that seems off, please file an issue. 
+
+Uses the package [html](https://github.com/pbreheny/html) for rendering.
 
 ## Rendering
 

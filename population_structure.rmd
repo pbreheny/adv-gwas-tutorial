@@ -152,9 +152,12 @@ Since we see that there are subpopulations in these data, we want to make sure a
 In addition to PCA, one other way to visualize relationships is to plot the [realized relatedness matrix](), $\mathbf{K} \equiv \frac{1}{p}\dot{\mathbf{X}}\dot{\mathbf{X}}^\top$. This is particularly relevant if you think you have family-based data. 
 
 ```{r, eval=FALSE}
-# get K 
+# get K - this can also take several minutes
 K <- big_tcrossprodSelf(X = obj$geno_imputed,
-                        fun.scaling = big_scale())
+                        fun.scaling = big_scale() 
+                        # ^ again, it is super important to center & scale 
+                        # the design matrix (X)! 
+                        )
 
 saveRDS(K, 'data/K.rds')
 ```

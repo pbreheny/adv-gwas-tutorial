@@ -28,80 +28,66 @@ As always, we begin by loading the libraries with the tools we need for analysis
 
 ```{r libs, message=FALSE}
 library(data.table)
-library(magrittr)
-library(qqman)
-library(snpStats)
 library(dplyr)
+library(bigsnpr)
+library(ggplot2)
 ```
 
-Next, we load the data. Start by loading the clinical data, as this has the outcome (coronary artery disease ('CAD')) we need for our models. 
+Next, we need to load the genetic data. For this section, we will work with the quality controlled (QC'd) and imputed data
+  
+```{r load_SNP_dat}
+# load QC'd & imputed data
+obj <- snp_attach("data/qc_penncath.rds")
+```
+
+Now, get the clinical data which has the binary outcome (coronary artery disease ('CAD')) of interest for analysis
 
 ```{r load_clinical_dat}
 clinical <- fread("data/penncath.csv")
 # str(clinical) # if you need to remind yourself of what is here
-```
 
-Next, we need to load the genetic data. For this section, we will work with the quality controlled (QC'd) data from the `SNPRelate` package (see module 1). We will also need the ".bim" file from the original data for making plots. 
-  
-```{r load_SNP_dat}
-# load QC'd data:
-qc_dat <- readRDS('data/gwas-qc.rds')
-# load the bim file
-bim <- fread('data/penncath.bim')
+# add the clinical data to the data in the fam file
+# NOTE: the key here is to make IDs align
+
+obj$fam <- dplyr::full_join(x = obj$fam,
+                            y = clinical,
+                            by = c('family.ID' = 'FamID'))
 ```
 
 If you completed the population structure module, you should load the principal components as well - we need them for our analysis. If you did not work through the population structure module, you can skip this step.  
 
 ```{r load_PC_dat}
 # load principal components 
-PCs <- readRDS(file = "data/PCs_base.rds") %>%
-  as.data.frame()
+svd_X <- readRDS(file = "data/svd_X.rds")
 
-names(PCs) <- paste0("PC", 1:ncol(PCs))
+# calculate the PCs                          
+pc <- sweep(svd_X$u, 2, svd_X$d, "*")
+dim(pc) # will have same number of rows as U
+names(pc) <- paste0("PC", 1:ncol(pc))
 
 ```
 
 # Implement tests
 
-We begin our analysis with a logistic regression model which uses the predictors sex and age to study the binary outcome CAD. With the function `snp.rhs.tests()`, we will perform a large set of logistic regression tests and save the p-values in a vector called `assoc_p_vals`. In addition to adjusting for sex and age, we will adjust for the first 4 principal components, as per the observations we made about the population structure in our data. 
+We begin our analysis with a logistic regression model which uses the predictors sex and age to study the binary outcome CAD. In addition to adjusting for sex and age, we will adjust for the first 5 principal components, as per the observations we made about the population structure in our data. 
 
-```{r assoc_test_1}
-assoc_test <- snpStats::snp.rhs.tests(
-  formula = clinical$CAD ~ clinical$sex + clinical$age + 
-    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4,
-  family   = "binomial",
-  link = "logit", # echoes the default settings
-  data = qc_dat$fam,
-  snp.data = qc_dat$genotypes
-  )
+```{r gwas, eval=FALSE}
+# Fit a logistic model between the phenotype and each SNP separately
+# while adding PCs as covariates to each model
+obj.gwas <- big_univLogReg(X = obj$geno_imputed,
+                           y01.train = obj$fam$CAD,
+                           covar.train = pc[,1:5],
+                           ncores = nb_cores())
 
-assoc_p_vals <- p.value(assoc_test)
-
+# this takes a min or two, so I will save these results 
+saveRDS(object = obj.gwas, file = "data/gwas.rds")
 
 ```
 
-Alternatively, one could implement this testing using the imputed data. There is an optional `rules` argument in the `snp.rhs.tests()` function that allows the user to include the rules used for imputation. I will forgo doing this here -- simply want to point out that this approach is possible. 
 
-```{r assoc_test_2, include=FALSE, eval=FALSE}
-# load partially imputed data
-partially_imputed <- readRDS("data/gwas-imp.rds")
-# load imputation rules 
-rules <- readRDS("data/rules.rds")
-
-assoc_test <- snpStats::snp.rhs.tests(
-  formula = clinical$CAD ~ clinical$sex + clinical$age + 
-    PCs$PC1 + PCs$PC2 + PCs$PC3 + PCs$PC4,
-  family   = "binomial",
-  link = "logit", # echoes the default settings
-  data = partially_imputed$fam,
-  snp.data = partially_imputed$genotypes,
-  rules = rules
-  )
-
-#FIXME: this makes R crash as of June 20, 2022
-
+```{r}
+obj.gwas <- readRDS("data/gwas.rds")
 ```
-
 
 # Visualize results 
 
@@ -114,8 +100,9 @@ Due to their magnitude, p-values from GWAS studies are typically illustrated on 
 As a first look at our results, we will examine a qq-plot. This plot compares the observed p-values from our SNP tests with the p-values we would expect if there were no associations. To make our qq-plot, we will use the `qq()` function from the package `qqman`. 
 
 ```{r qq_plot}
-qq_plot <- qqman::qq(assoc_p_vals)
-(qq_plot)
+# Q-Q plot of the object
+qq <- bigsnpr::snp_qq(obj.gwas)
+(qq)
 ```
 
 If the observed p-values follow exactly the distribution we would expect under the global null hypothesis, then all points will be plotted on the red line. 
@@ -124,23 +111,18 @@ We notice in this qq-plot that some of the p-values (plotted as points) diverge 
 
 ## Using a Manhattan plot 
 
-A [Manhattan plot](https://en.wikipedia.org/wiki/Manhattan_plot) makes the smallest p-values "pop" by plotting all p-values so that the smallest ones are the highest. We can create a Manhattan plot of our results using the `manhattan()` function (from the aforementioned `qqman` package)
+A [Manhattan plot](https://en.wikipedia.org/wiki/Manhattan_plot) makes the smallest p-values "pop" by plotting all p-values so that the smallest ones are the highest. We can create a Manhattan plot of our results using the `manhattan()` function (from the aforementioned `qqman` package).^[if you like [viridis](https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html) colors as much as I do, check out [this site](https://waldyrious.net/viridis-palette-generator/) for HEX codes.]
 
 ```{r manhattan_plot}
-# format data to have readable labels. 
-manh_data <- data.frame(
-    SNP = assoc_test@snp.names, # NB: for S4 objects in R, use the "@" to access items
-    P = assoc_p_vals
-  ) %>%
-  left_join(bim, by = c("SNP" = "V2")) %>%
-  rename(
-    CHR = V1, 
-    BP = V4
-  ) # recall that 'bim' files have a standardized format, so the column order is 
-# always the same 
+viridis22 <- c(rep(c("#fde725", "#90d743", "#35b779", "#21918c", "#31688e", 
+                "#443983", "#440154"), 3), "#fde725")
 
-manh_plot <- manhattan(manh_data, ylim = c(0, 8))
-(unlist(manh_plot))
+manh <- snp_manhattan(gwas = obj.gwas,
+              infos.chr = obj$map$chromosome,
+              infos.pos = obj$map$physical.pos,
+              colors = viridis22)
+
+(manh)
 ```
 
 Here, the x-axis of the plot is divided into "bins", where each bin represents a chromosome. The y axis shows the negative, log-transformed p-values. Each of the p-values from our analysis is plotted in the bin corresponding to the chromosome of the gene in that particular test, and the height of the point directly correlates with the significance of the test.
@@ -150,41 +132,26 @@ The goal of Manhattan plots are to help identify SNPs (or a region of SNPs) that
 I could improve the Manhattan plot above by adding annotations which indicate the SNPs with the smallest p-values: 
 
 ```{r manh2}
-
 # NB:  5 × 10e−8 is a common threshold for significance in GWAS studies, 
 #   whereas 5 x 10e-6 is a common threshold for "suggestive" results
-# signif_threshold <- 5e-8 # this would be a more stringent alternative 
+
+signif_threshold <- 5e-8 
 suggest_threshold <- 5e-6 
-manh2 <- manhattan(manh_data, ylim = c(0, 8), annotatePval = suggest_threshold)
 
-(unlist(manh2))
-```
-
-Based on the Manhattan plots, one region of interest could be around rs9632884 on Chromosome 9 - this SNP is above the suggestive threshold (indicated by the blue line), and there are a lot of other notable results clustered near this SNP. If I wanted to highlight a region of interest, I could do this to highlight the specific genes in this region, or [locus](https://www.genome.gov/genetics-glossary/Locus). This will also allow us to practice the final piece of functionality from `qqman`:
-
-```{r manh3}
-bp_center <- manh_data %>% # NB: 'bp' stands for 'base pair'
-  filter(SNP == "rs9632884") %>%
-  pull(BP)
-
-bp_range <- c(-1, 1) * 100000 + bp_center
-
-snps_highlight <- manh_data %>%
-  filter(BP >= bp_range[1], BP <= bp_range[2], CHR == 9) %>%
-  pull(SNP)
-
-manh3 <- manhattan(
-  manh_data, 
-  ylim = c(0, 10), 
-  annotatePval = .000005, 
-  highlight = snps_highlight
+(manh + 
+  geom_hline(yintercept = -log10(signif_threshold),
+             # note: plot y-axis is on -log10 scale 
+             color = "#35b779",
+             lty = 2) + 
+  geom_hline(yintercept = -log10(suggest_threshold),
+             color = "#443983",
+             lty = 2)
 )
-
-(unlist(manh3))
 ```
 
+Based on the Manhattan plots, one region of interest could be around rs9632884 on Chromosome 9 - this SNP is above the suggestive threshold (indicated by the blue line), and there are a lot of other notable results clustered near this SNP. If I wanted to highlight a region of interest, I could do this to highlight the specific genes in this region, or [locus](https://www.genome.gov/genetics-glossary/Locus). 
 
 
-# Implementation using PLINK software 
+# Doing GWAS with PLINK software (command line)
 
 The above is a simple outline of tools for summarizing GWAS results in `R`. There are other tools available for implementing GWAS analyses - one popular software is called `PLINK`. The [PLINK](https://zzz.bwh.harvard.edu/plink/) software is made up of command line programs that implement a wide array of GWAS (and whole genome) analyses. [This tutorial](https://genomicsbootcamp.github.io/book/your-first-plink-tutorial.html) provides a place to begin for new PLINK users, and [this other tutorial](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6001694/) is well-known and more comprehensive. 
