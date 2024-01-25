@@ -18,14 +18,6 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 })
 ```
 
-# Before you begin...
-
-## Motivating questions 
-
-1. What assumptions does a GWAS make about a population? 
-
-2. What happens when these assumptions are not met? 
-
 ## Objectives of this module 
 
 When you have completed this module, you will know: 
@@ -36,37 +28,21 @@ When you have completed this module, you will know:
 
 3. What tools are available for analyzing complex data that do not meet the basic GWAS assumptions. 
 
-4. How to implement the tools mentioned above using `R`
+4. How to implement the tools mentioned above using `bigsnpr`
 
 ## Set up 
 
-The computational methods section of this module is divided into two sections, according to the type of data set you are bringing into this module. If you skipped the imputation module of this tutorial, or if your data was too big to read into your computer's memory, read the section labeled "PCA for large/not fully imputed data" for your computational methods. If you completed imputation for your data set, refer to the "PCA for fully-imputed data" section.   
-
-Remember: "fully imputed" means that there are no missing values in the data set. 
+The computational methods section of this module depend on having fully-imputed data, meaning that there are no missing values in the genotype data. 
 
 As a start, load the packages we will need for this module: 
 
 ```{r load_pkgs}
-# Load our packages  (same ones mentioned in the data module)
-# two packages are from Bioconductor 
-library(snpStats) 
-library(SNPRelate)
-
-# all other packages are on CRAN 
+# load our packages  (same ones mentioned in the data module)
 library(data.table)
 library(dplyr)
-library(magrittr)
+library(bigsnpr)
 library(ggplot2)
-library(ncvreg)
-library(RSpectra)
-
-# register cores for parallel processing 
-library(doSNOW)
-registerDoSNOW(makeCluster(4))
-
 ```
-
-
 
 # Population structure
 
@@ -77,8 +53,6 @@ In a GWAS context, *population structure* is a kind of relatedness among the ind
 
 Population structure is defined by the existence of allele frequency differences that characterize sub-populations and is driven by the combined effects of evolutionary processes such as genetic drift, migration, demographic history, and natural selection.
 
-Population structure is a common phenomenon in genetic data. Varying levels of relatedness are almost always present among genetic samples, even in samples of unrelated individuals and seemingly homogeneous populations. For example, European American, Han Chinese, and recently, cohorts within the UK Biobank data have been shown to exhibit patterns of population and geographic structure despite their seemingly similar subjects.
-
 Population structure is broadly categorized based on whether it describes recent or ancient relatedness. Ancient relatedness describes the presence of a common ancestor many generations previously. The presence of distinct ancestry groups with different allele frequencies in a sample is known as *population stratification* (a.k.a *ancestry differences*). Recent relatedness describes the sharing of a common ancestor only several generations previously. Pedigree-based methods may be used to explicitly model recent relatedness if familial relationships are known. In the absence of known familial relationships, recent relatedness is referred to as *cryptic relatedness*. ^[NB: definitions of the terms `recent` and `ancient` are somewhat subjective and hand-wavy since, in theory, if you look back far enough, everyone shares a common ancestor. However, the idea is that humans migrated, separated, and mated such that over time distinct groups developed allele frequencies different enough to confound an analysis.]
 
 ## Population stratification 
@@ -86,10 +60,6 @@ Population structure is broadly categorized based on whether it describes recent
 Population stratification in particular has been of great concern in genetic studies due to its potential to lead to spurious associations when population structure is associated with differences in both allele frequency and the trait or disease.
 
 As an example, consider a GWAS to assess genetic variants associated with lung cancer in a sample comprised of subjects from two distinct subpopulations, A and B. Assume the minor allele of SNP X is present with higher frequency in subpopulation A compared to subpopulation B, but has no direct effect on lung cancer. Also suppose these subpopulations are geographically segregated in a such a way that subpopulation A is exposed to good air quality, and subpopulation B to poor air quality, and that air quality has a direct effect on lung cancer. A GWAS of data from these subpopulations would find SNP X to be significantly associated with lung cancer, even though we know it has no effect on lung cancer. If subpopulations A and B were not subject to different air qualities, all else being equal, SNP X would not be found to be associated with the phenotype.
-
-Another apocryphal but illustrative example of how population stratification can lead to confounding in genetic studies is linked below.
-
-* [Beware the chopsticks gene](https://www.nature.com/articles/4000662)
 
 ## Cryptic relatedness 
 
@@ -101,281 +71,105 @@ GWAS (and many statistical tests) assume samples are independent. Cryptic relate
 
 With this in mind, it is critical to evaluate and account for potential population structure in our data in order to avoid false positives and negatives. 
  
- 
 ## Principal component analysis (PCA)
  
-### Brief introduction  
- One of the simplest and most common methods used to assess and correct for population structure in our data is with principal component analysis (PCA). Here, I will present a 'crash course' on the concepts of PCA and provide an example.
+### What is PCA 
 
-  Conceptually, PCA can be thought of as extracting the axes of greatest variability in our data. PCA creates linear combinations of a given set of variables; this lets the user represent a lot of correlated variables with a smaller number of uncorrelated variables - so PCA gives us **dimension reduction**, which is really helpful for high dimensional settings like GWAS data.
-  
-  Connections to different conceptual frameworks:
+In essence, principle component analysis is a way to summarize data. Others have given [really good explanations](https://stats.stackexchange.com/questions/2691/making-sense-of-principal-component-analysis-eigenvectors-eigenvalues) of what PCA is and how it is used, so I will not write in detail about that here. Suffice it to say that we will use PCA here to detect population structure in genetic data.
 
-  - From a linear modeling framework, PCA is an orthogonal linear transformation of a data set.
 
-  - From a machine learning framework, PCA is a type of unsupervised learning. 
-  
-As a brief example with a smaller data set, I'm going to illustrate some of these concepts using some smaller data with known structure. 
+Connecting PCA to our data: let's call our SNP data $\mathbf{X}$. We load our data below: 
 
-First, we'll read in the small data and filter out the monomorphic SNPs. Note that this data set contains a known race variable.
-
-```{r process_admixture}
-# read in smaller data 
-smaller_data <- read.delim("https://s3.amazonaws.com/pbreheny-data-sets/admixture.txt")
-# see what it looks like 
-smaller_data[1:5, 1:5]
-# assign the 'race' variable 
-race <- smaller_data$Race
- # create a matrix with only SNP data 
-all_SNPs <- as.matrix(smaller_data[,-1])
-# filter out monomorphic SNPs
-polymorphic <- apply(all_SNPs, 2, sd) != 0
-SNPs<- all_SNPs[,polymorphic] 
-
-# look at the resulting matrix dimensions
-dim(SNPs)
-# see what the data set looks like in terms of racial categories 
-table(race)
+```{r}
+# read in our QC'd, imputed data
+obj <- snp_attach("data/qc_penncath.rds")
 ```
 
-Next, I'm going to compute the principal components (PCs) and plot a [scree plot](https://en.wikipedia.org/wiki/Scree). A scree plot tells us the proportion of variance explained by each of the PCs. PCA is such that the PCs are ordered from those that explain the greatest to least amount of variability. Scree plots are sometimes used to decide how many PCs are appropriate to include. We look for the 'elbow' in the plot, which indicates when the proportion of variance explained by including additional PCs may not be worth the extra df. There are also a number of more complex tests and tools to determine this as well, or often the top 10 PCs are simply used in practice. 
-
-```{r scree_admixture}
-# use the convenient prcomp() function to do all the PCA steps in one line! 
-pca <- prcomp(SNPs, center = TRUE, scale = TRUE)
-# look at the results 
-pca$x[1:5, 1:5]
-# plot the top 10 PCs in a scree plot 
-plot(x = 1:10,
-     y = 100 * proportions(pca$sdev[1:10]^2),
-     type = 'b',
-     ylab = 'Proportion of variance explained',
-     xlab = 'PC',
-     main = 'Example Scree Plot')
-
-```
-
-We see this elbow point at 3 PCs, which makes sense, given that there are 4 distinct races in this data set (we lose one degree of freedom when we center our data). The first PC explains about $30 \%$ of the variance in our data, while the second PC explains a little less than $20 \%$. Together, this means that the first 3 PCs explain over half of the variance in the data set. 
-
-Now we'll plot the first two PCs against each other, and color the data points by the known race of each subject. We expect to see clustering that corresponds to population structure. 
-
-```{r plot_admixture}
-pca_dat <- data.frame(race = race, PC1 = pca$x[,1], PC2 = pca$x[, 2])
-pca_plot <- ggplot(pca_dat, aes(x = PC1, y = PC2, col = race)) +
-  geom_point() +
-  coord_fixed()
-plot(pca_plot)
-```
-
-Indeed, we see that the first two PCs differentiate the racial groups, which cluster together. We can see that PC1 seems to differentiate the European/Japanese populations from the African/African American ones, while PC2 seems to primarily differentiate the European and Japanese populations. Even if we did not have the known race vector to color the points, we could still pick out some clustering from this plot, which indicates underlying structure. If there were no underlying structure in our data, we would expect to see no clustering or systematic pattern in this plot. 
-
-As a counter example to this plot, we can plot the PCs from a random matrix (*i.e.* a matrix with no population structure):
-
-```{r pc_rand}
-# for the sake of illustration, I'm going to use the same dimensions as those 
-#   in the smaller data in the previous example.
-n <- 197
-p <- 98
-X <- matrix(rnorm(n * p), n, p)
-pca_rand <- prcomp(X, center = TRUE, scale = TRUE)
-rand_dat <- data.frame(PC1 = pca_rand$x[,1], PC2 = pca_rand$x[, 2])
-rand_plot <- ggplot(rand_dat,
-                    aes(x = PC1, y = PC2)) +
-  geom_point() +
-  coord_fixed()
-plot(rand_plot)
-```
-
-We see that in this plot, there is underlying structure = no clustering or pattern. If I saw results like this "in the wild", I would be fairly confident that population structure is not a major issue in my data set. 
-
-  
-### PCA for fully-imputed data  
-  
-Now, let's go back to our running example with the large SNP data set. For our case, let's call our SNP data $X$. I can think of $X$ as a matrix, where I have $n$ rows (in this case, n = 1401) and $p$ is the number of columns (in this case, p = 752,675). Since we have $p >> n$, we cannot simply use the spectral decomposition to calculate the eigenvalues of the covariance matrix  $\mathbf{S} \equiv \tilde{\mathbf{X}} \tilde{\mathbf{X}}^T$, as this $\mathbf{S}$ may not be positive definite. Instead, we will use a method that exploits the power of the **singular value decomposition**: 
+We can think of $\mathbf{X}$ as a matrix with $n$ rows (in this case, n = `r nrow(obj$geno_imputed)`) and $p$ columns (in this case, p = `r ncol(obj$geno_imputed)`). For PCA, we will use a method that exploits the power of the **singular value decomposition**: 
  
-  1. Standardize (center and scale) the data $\mathbf{X}$, and call the resulting matrix $\tilde{\mathbf{X}}$.  
+  1. Standardize (center and scale) the data $\dot{\mathbf{X}}$.  
   
-  2. Calculate $\tilde{\mathbf{X}} \equiv \mathbf{U}\mathbf{D}\mathbf{V}^T$ using the singular value decomposition (SVD). Here, $\mathbf{U}$ and $\mathbf{V}$ are both orthogonal matrices, and $\mathbf{D}$ is a diagonal matrix of non-negative numbers. We say that $\mathbf{U}$ and $\mathbf{V}$ contain the left and right singular vectors, respectively. The values on the diagonal of $\mathbf{D}$ are the singular values. 
+  2. Calculate $\dot{\mathbf{X}} \equiv \mathbf{U}\mathbf{D}\mathbf{V}^T$ using the singular value decomposition (SVD). Here, $\mathbf{U}$ and $\mathbf{V}$ are both orthogonal matrices, and $\mathbf{D}$ is a diagonal matrix of non-negative numbers. We say that $\mathbf{U}$ and $\mathbf{V}$ contain the left and right singular vectors, respectively. The values on the diagonal of $\mathbf{D}$ are the singular values. 
   
-  3. We can calculate the principal components using the vectors of $\mathbf{U}$ and the matrix $\mathbf{D}$, which is super cool! This is possible because the columns of $\mathbf{U}$ are eigenvectors of the covariance matrix $\mathbf{S}$. Specifically, the $i^{th}$ principal component $p_i$ can be calculated as $p_i = \mathbf{u}_i d_i$, where $\mathbf{u}_i$ is the $i^{th}$ column of $\mathbf{U}$ and $d_i$ is the $i^{th}$ value on the diagonal of $\mathbf{D}$.  
+  3. We can calculate the principal components using the vectors of $\mathbf{U}$ and the matrix $\mathbf{D}$, which is super cool! This is possible because the columns of $\mathbf{U}$ are eigenvectors of the covariance matrix $\dot{\mathbf{X}}\dot{\mathbf{X}}^\top$. Specifically, the $i^{th}$ principal component $p_i$ can be calculated as $p_i = \mathbf{u}_i d_i$, where $\mathbf{u}_i$ is the $i^{th}$ column of $\mathbf{U}$ and $d_i$ is the $i^{th}$ value on the diagonal of $\mathbf{D}$.  
+
+### How to visualize PCA
+
+To visualize PCA, we will look at two kinds of visuals:
+
+  - A [scree plot](https://en.wikipedia.org/wiki/Scree), which tells us the proportion of variance explained by each of the PCs. 
   
-We will put these steps into practice now - if you have saved the fully imputed data set, load it here: 
+  - A plot of PCA scores, which is a scatter plot whose axes represent two principle components 
 
-```{r load_X}
-X <- readRDS(file = "data/fully_imputed_numeric.rds")
-```
+### PCA in R 
 
-Remember, we cannot use the `prcomp()` function on our SNP data set - it is too big. We will need some other tools: 
+```{r, eval=FALSE}
+# SVD 
+svd_X <- big_SVD(obj$geno_imputed, # must have imputed data
+                 big_scale(), # centers and scales data -- REALLY IMPORTANT! 
+                 k = 10 # use 10 PCs for now -- can ask for more if needed
+                 )
+# Note: this can take a while to run (several minutes, depending on your
+# machine). I'm going to save this SVD as an RDS object, and refer back to that in future use. 
 
-  - I will use the function `std()` from the `ncvreg` package to standardize $\mathbf{X}$
-  
-  - I will use the `svds()` function from the `RSpectra` package do implement the singular value decomposition. `RSpectra` will let us use a lower-dimension approximation to the SVD, making it feasible to work with this large data set. 
-  
-  - I will use the `sweep()` function in `base` to return an array 
-  
-Since we are usually only interested in the first few PCs, I will calculate just the first 4 PCs in this example. 
-
-
-```{r pca}
-# Center and scale the design matrix 
-X_scaled <- ncvreg::std(X)
-# remove unscaled X object to save memory
-rm(X)
-# use singular value decomposition to derive the left singular vectors 
-# NB: on my laptop, this took about 10 minutes to run 
-singular_vectors <- RSpectra::svds(X_scaled,
-                         k = 4,
-                         nu = 4, # NB: default is nu = k
-                         nv = 0)
-# check the dimension of the returned "u" matrix and "d" vector 
-dim(singular_vectors$u) 
-length(singular_vectors$d)
-# calculate the PCs                          
-PCs <- sweep(singular_vectors$u, 2, singular_vectors$d, "*")
-dim(PCs) # will have same dimensions as u
-```
-
-```{r save_PCs, eval=FALSE}
-# save the PCs and scaled X matrix
-# - will need them for analysis 
-
-saveRDS(X_scaled,
-        file = "data/fully_imputed_scaled.rds")
-
-saveRDS(PCs, 
-        file = "data/PCs_base.rds")
-
-```
-
-```{r scree}
-# find the standard deviations of each PC
-PC_sds <- apply(X = PCs,
-                MARGIN = 2, # columns are PCs
-                FUN = sd)
-# create a scree plot
-plot(x = 1:ncol(PCs),
-     y =  100 * proportions(PC_sds^2),
-     type = 'b',
-     ylab = 'Proportion of variance explained',
-     xlab = 'PC',
-     main = 'Scree Plot: SNP data')
-```
-
-Here, we see that the first PC explains over half of the variance in the data set. This indicates that there is probably evidence of population structure in this data set. Based on this, I expect that a plot of the principal components themselves will show strong clustering. 
-
-```{r pca_plot}
-# create a plot of the first two PCs
-PC_dat <- as_tibble(PCs) # make a data set (better than a matrix for plotting)
-names(PC_dat) <- paste0("PC", 1:ncol(PCs))
-# plot these principal components
-PC_dat %>%
-  ggplot(aes(x = PC1, y = PC2)) +
-  geom_point() +
-  coord_fixed()
+saveRDS(svd_X, "data/svd_X.rds")
 ```
 
 
-We notice in the plot above that there is indeed notable clustering - we have evidence that our SNP data does have population structure. We will need to keep this in mind as we move forward to analysis, as this will guide our choice(s) of tools for analysis and interpretation. 
+```{r}
+# load data from above 
+svd_X <- readRDS("data/svd_X.rds")
 
-Similar to examining racial group in our example PCA, we can use the clinical features in our SNP data set to see if there is any relationship between these clinical factors and the clustering we see in our PCA. 
+# look at what we have:
+str(svd_X)
 
-```{r load_clinical}
-# load our clinical data 
-clinical <- fread('data/penncath.csv') %>%
+# scree plot
+plot(svd_X) # 5 PCs seem to capture most of the variance
+
+# plot PCs 1 and 2 
+plot(svd_X, type = "scores") # first 2 PCs definately capture some separation
+```
+
+We see some separation in the first two PCs -- let's look at the clinical data and see if we can identify a pattern: 
+
+```{r}
+clinical <- fread('data/penncath.csv') |>
   mutate(across(.cols = c(sex, CAD),
                 .fns = as.factor))
-# remind ourselves of what clinical/demographic information we have 
-head(clinical)
-# plot these principal components, using color codes to differentiate sexes
-PC_dat %>%
-  ggplot(aes(x = PC1, y = PC2,
-             col = clinical$sex)) +
-  geom_point() +
-  coord_fixed() + 
-  theme(legend.position = "none")
+dplyr::glimpse(clinical)
 
+plot(svd_X, type = "scores") +
+  aes(color = clinical$sex) +
+  labs(color = "Sex")
+```
+
+Although sex does not delineate the separation we observe in the PC plot, this gives an idea of how you could go about examining how different sample-level features (e.g., batch, family, data collection site, etc.) create subpopulations in the data.
+
+Since we see that there are subpopulations in these data, we want to make sure and adjust for this in our GWAS analysis. Hold onto the SVD results -- we will use them again. 
+
+### Family relatedness 
+
+In addition to PCA, one other way to visualize relationships is to plot the [realized relatedness matrix](), $\mathbf{K} \equiv \frac{1}{p}\dot{\mathbf{X}}\dot{\mathbf{X}}^\top$. This is particularly relevant if you think you have family-based data. 
+
+```{r, eval=FALSE}
+# get K 
+K <- big_tcrossprodSelf(X = obj$geno_imputed,
+                        fun.scaling = big_scale())
+
+saveRDS(K, 'data/K.rds')
+```
+
+```{r}
+K <- readRDS("data/K.rds")
+library(corrplot)
+corrplot::corrplot(K[1:50, 1:50]*(1/ncol(obj$geno_imputed)),
+                   is.corr = FALSE,
+                   tl.pos = "n")
 
 ```
 
-Based on the plot above, sex does not seem to be associated with the clustering we see in the principal components. In this case, we do not have access to further information on the demographics of the patients represented in the study. However, we can conjecture that unknown factors (*e.g.* racial/ethnic group, diet, etc.) likely varied among the study population, as authors reported that these data were collected at several sites in the US as well as in Germany (refer to the citation in the quality control module).
+If there are closely related samples or clusters of families/batches/etc., you will see a $\mathbf{K}$ with a 'quilt-like' pattern, with blocks of samples appearing together. Here, we see no such pattern - individuals are only correlated with themselves. This means family-based methods are not needed here.
 
-### PCA for large/not fully imputed data
+## Further reading 
 
-For really large data (or data that did not need imputation), we'll be using tools from the package `SNPRelate` which allow us to do key computations without having a fully imputed SNP data set. To use `SNPRelate` functions, we need to get our data in a GDS format. `SNPRelate` has a function `snpgdsBED2GDS()` to convert PLINK binary data into a GDS file, bed/bim/fam $\longrightarrow$ GDS, but as far as I am aware, there is no tool to convert `SnpMatrix` objects to GDS, `SnpMatrix` $\longrightarrow$ GDS. So, we need 
-to first convert our qc data back to bed/bim/fam using the `snpStats` function `write.plink()`, and then use that to create a GDS file: `SnpMatrix` $\longrightarrow$ bed/bim/fam $\longrightarrow$ GDS.
-
-I'll re-load the qc-data from the quality control module.
-
-
-```{r load_qc_data, eval=FALSE}
-qc_data <- readRDS('data/gwas-qc.rds')
-write.plink(
-  file.base = "data/qc_data",
-  snps = qc_data$genotypes,
-  pedigree = qc_data$fam$pedigree,
-  id = qc_data$fam$member,
-  father = qc_data$fam$father,
-  mother = qc_data$fam$mother,
-  sex = clinical$sex,
-  phenotype = clinical$CAD + 1,
-  chromosome = qc_data$map$chromosome,
-  genetic.distance = qc_data$map$cM,
-  position = qc_data$map$position,
-  allele.1 = qc_data$map$allele.1,
-  allele.2 = qc_data$map$allele.2
-)
-```
-
-If we wanted to spend the time using the mode imputation and rounding to get a qc-data
-set with absolutely no missingness, we could do bed/bim/fam/ $\longrightarrow$ `SnpMatrix` bed/bim/fam/ $\longrightarrow$ GDS (this is annoying).
-
-We will now create our GDS file, use `SNPRelate` to compute the PCs, and plot them to see if it looks like there is any kind of sample
-structure as we saw in the previous example. We don't have a known race or subpopulation status vector to color this plot, but we can look for clustering.
-
-
-```{r pca_SNPRelate}
-# create gds file so we can use SNPRelate - using unimputed qc data
-qc_files <- lapply(c(bed='bed', bim='bim', fam='fam', gds='gds'), function(x) paste0('./data/qc_data.', x))
-
-# IMHO, this next function is poorly named, but it will serve our purposes here... 
-snpgdsBED2GDS(qc_files$bed, qc_files$fam, qc_files$bim, qc_files$gds) 
-
-# open the GDS file
-genofile <- snpgdsOpen(qc_files$gds)
-
-# get PCs
-pca <- snpgdsPCA(genofile) 
-
-# close the file
-snpgdsClose(genofile)
-
-# plot
-plot(1:10, pca$varprop[1:10], type = 'b', ylab = 'Proportion of variance explained', xlab = 'PC')
-
-
-# put top 10 pcs in a table 
-pctab <- data.frame(sample.id = pca$sample.id,
-                    pca$eigenvect[, 1:10],
-                    stringsAsFactors = FALSE)
-names(pctab)[-1] <- paste0('PC', 1:10)
-
-# plot 
-pctab %>%
-  as_tibble() %>%
-  ggplot(aes(x = PC1, y = PC2)) + 
-  geom_point() + 
-  coord_fixed() + 
-  theme(legend.position = "none")
-```
-
-Since the first four PCs explain most of the variance in the data, let's save these for analysis downstream
-
-```{r save_PCs_SNPRelate}
-saveRDS(pctab %>% dplyr::select(PC1:PC4),
-        "data/PCs_SNPRelate.rds")
-```
-
-
-
-
-
+The `bigstatsr` package documentation gives further [examples](https://privefl.github.io/bigstatsr/reference/plot.big_SVD.html) of PCA, and `bigsnpr` has some [vignettes](https://privefl.github.io/bigsnpr/articles/how-to-PCA.html) that go into deeper detail on PCA for genetic data. 
