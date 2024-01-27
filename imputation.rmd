@@ -25,7 +25,7 @@ knitr::knit_hooks$set(small.mar = function(before, options, envir) {
 
 ## Set up 
 
-To begin, read in the **qc** (quality controlled) data from earlier step (refer back to the "Data" page of the tutorial). 
+To begin, read in the **QC'd** (quality controlled) data from earlier step (refer back to the first module of the tutorial). 
 
 ```{r read}
 # load our packages  (same ones mentioned in the data module)
@@ -34,7 +34,7 @@ library(dplyr)
 library(bigsnpr)
 library(ggplot2)
 
-# create a bigSNP data object using data from files created in previous module 
+# create a bigSNP data object using data from PLINK files created in previous module 
 # snp_readBed("data/qc_penncath.bed") # again, snp_readBed is a one-time thing
 obj <- snp_attach("data/qc_penncath.rds")
 # double check dimensions 
@@ -62,15 +62,17 @@ Recall that in the QC step of our analysis, we excluded SNPs with $\ge 90\%$ mis
 First, let's check how many SNPs in our qc'd data set have some missing data:
 
 ```{r, any-missing}
-snp_stats <- big_counts(obj$genotypes)
+snp_stats <- bigstatsr::big_counts(obj$genotypes)
+# ^ bigstatsr is loaded with bigsnpr, just being explicit here for didactic purposes
 colnames(snp_stats) <- obj$map$marker.ID
 snp_stats[,1:5] # shows # of 0, 1, 2, and NA values for 1st 5 SNPs
 
-any_missing <- sum(snp_stats[4,] != 0)
-call_rates <- colSums(snp_stats[1:3,])/colSums(snp_stats)
+(any_missing <- sum(snp_stats[4,] != 0)) # shows # of SNPs with NA values 
+call_rates <- colSums(snp_stats[1:3,])/colSums(snp_stats) 
+head(call_rates)
 ```
 
-This tells us that `r any_missing` out of `r ncol(snp_stats)` SNPs still have some missing values (albeit less than 10\%.) The average call rate is `r mean(call_rates)` -- this high call rate is a good sign, affirming the quality of our data. 
+This tells us that `r any_missing` out of `r ncol(snp_stats)` SNPs still have some missing values (albeit less than 10\%.) The average call rate is `r mean(call_rates) |> round(3)` -- this high call rate is a good sign, affirming the quality of our data. 
 
 Even though the average call rate is high, having any missing values will be a problem for analysis downstream -- most analytical approaches cannot handle missing values. To 'fill in the blanks', we can use an imputation method: we will look at `bigsnpr::snp_fastImputeSimple` as a place to begin, and `bigsnpr::snp_fastImpute()` for some more advanced techniques. 
 

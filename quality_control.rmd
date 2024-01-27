@@ -257,6 +257,24 @@ Now, let's actually do the subsetting. **IMPORTANT:** The key thing to remember 
 
 Using our QC'd data in `qc_penncath`, we will continue in the next section with [imputation](docs/imputation.html)
 
+### Note on memory issues 
+
+One of the great features about the `bigSNP` objects in `bigsnpr` is that these objects save the large genotype data (i.e., what's in the .bed PLINK file) as file-backed -- in layman's terms, file-backed objects let you have an object in your global environment that is 'pointing at' the large data file stored on disk. If you want to read genotype data from just a few SNPs into memory, we can do this:
+
+```{r}
+# notice: data are file backed 
+class(penncath$genotypes)
+
+# read in just a few SNPs 
+first_10_snps <- penncath$genotypes[,1:10]
+
+# these are now stored in memory as a matrix 
+class(first_10_snps); dim(first_10_snps)
+
+# take a look at this
+head(first_10_snps)
+```
+
 # Advanced quality control steps
 
 ## Sex check
