@@ -32,8 +32,8 @@ Throughout, I'm going to use the `data.table` package to read in and work with d
 
 This tutorial will use data from the PennCATH study of genetic risk factors for coronary artery disease. Download the data from one of the following sources (the contents are the same):
 
-- [Data (zip)](https://d1d95ugxcvloeo.cloudfront.net/penncath.zip): Windows
-- [Data (tar)](https://d1d95ugxcvloeo.cloudfront.net/penncath.tar.gz): Mac/Linux
+- [Data (zip)](https://d1ypx1ckp5bo16.cloudfront.net/penncath/penncath.zip): Windows
+- [Data (tar)](https://d1ypx1ckp5bo16.cloudfront.net/penncath/penncath.tar.gz): Mac/Linux
 
 Download and unzip/untar the data; you can read the paper as well if you wish:
 
