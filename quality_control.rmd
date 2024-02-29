@@ -100,7 +100,7 @@ So, for example, the file tells us that genetic locus rs12565286 is located 7212
 
 ## `.bed`
 
-Finally, the `.bed` file, which has all the data. This is by far the largest of the three files, as it contains the entire `r nrow(fam)` by `r nrow(bim)` matrix of genotype calls for every subject and every locus. To keep things manageable, this file is encoded in a special binary format -- i.e., you can't just open the file in a text editor or load it with something like `r ?data.table::fread()`. That said, we can convert our PLINK data into a `bigSNP` object (defined in `bigsnpr`) -- this will let us look at our data in our `R` session. 
+Finally, the `.bed` file, which has all the data. This is by far the largest of the three files, as it contains the entire `r nrow(fam)` by `r nrow(bim)` matrix of genotype calls for every subject and every locus. To keep things manageable, this file is encoded in a special binary format -- i.e., you can't just open the file in a text editor or load it with something like `fread()`. That said, we can convert our PLINK data into a `bigSNP` object (defined in `bigsnpr`) -- this will let us look at our data in our `R` session. 
 
 
 ```{r}
