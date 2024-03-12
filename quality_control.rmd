@@ -109,20 +109,21 @@ library(bigsnpr)
 library(bigstatsr) # a useful dependency of bigsnpr
 ```
 
+To read this into `R`, run the following chunk **only once**. This will create the .rds and .bk files you need, in the same directory where you've stored the `penncath.bed` (my directory is called `data/`)
 
-
-```{r read-plink}
-# run the line below just once, to create the .rds and .bk files you need 
+```{r read-plink, eval=FALSE}
 # Note: The function assumes that all the files have the same base filename, and differ only in their extension. 
-# snp_readBed("data/penncath_clean.bed")
 
-# now, read in the data to your R session 
-penncath <- snp_attach("data/penncath_clean.rds")
+snp_readBed("data/penncath.bed")
+```
+
+Now, read in the data to your R session 
+```{r}
+penncath <- snp_attach("data/penncath.rds")
 
 # check out this bigSNP object 
 str(penncath)
 ```
-
 
 From here, `bigsnpr` has a lot of functions to help us prepare data for analysis -- these functions depend on you having [PLINK 1.9](https://www.cog-genomics.org/plink2) installed somewhere on your local machine. Go to that page, download the files, and save them on your computer (I keep files like this in `~/bin/`). In order to tell whether PLINK installed correctly and is ready to go, type `path/to/plink --version` on either the command line prompt or in 'Terminal' in RStudio, where you fill in the path with the path to where you saved the downloaded files. If things are working correctly, you will see a message that says something like `PLINK v1.90b6.26 64-bit (2 Apr 2022)` -- the `PLINK v1.9` is the key here. 
 
@@ -237,7 +238,7 @@ We can do steps (1), (2), (4), and (5) in one command below:
 ```{r, eval=FALSE}
 path_to_qc_penncath <- snp_plinkQC(
   plink.path = "~/bin/plink", # you will need to change this according to your machine!
-  prefix.in = "data/penncath_clean", # TODO: move 
+  prefix.in = "data/penncath", # creates *new* rds with quality-controlled data
   prefix.out = "data/qc_penncath",
   maf = 0.01, # filter out SNPs with MAF < 0.01
   geno = 0.1, # filter out SNPs missing more than 10% of data
@@ -254,6 +255,13 @@ Step (3) we have done by visual inspection -- in this data set, that is all we n
 So, we're getting rid of about 100,000 SNPs and keeping about 750,000.
 
 Now, let's actually do the subsetting. **IMPORTANT:** The key thing to remember here is that when you subset genetic data in PLINK files, you need to subset both the `map` object and the genotypes -- if you don't, these objects will no longer match and you will end up with a devastating row mismatch problem. If you are using `PLINK` (any version) on the command line or `bigsnpr` in `R`, then this is automatically taken care of for you. However, if you are reading in the .bim/.fam files as data frames (as we did at the beginning), then you would need to make sure you subset both files. 
+
+Let's look at our new `RDS` object, the one we just created using our QC steps: 
+
+```{r}
+qc <- snp_attach("path_to_qc_penncath.rds")
+```
+
 
 Using our QC'd data in `qc_penncath`, we will continue in the next section with [imputation](docs/imputation.html)
 
