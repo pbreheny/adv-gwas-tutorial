@@ -41,13 +41,38 @@ Download and unzip/untar the data; you can read the paper as well if you wish:
 
 In what follows, I will assume that the unzipped data files are in a folder called `data`; if you store them somewhere else, change the directory references.
 
+# Downloading PLINK 
+
+PLINK is a **command line tool** (i.e., it is software that you typically run in the terminal/shell). [PLINK](https://academic.oup.com/gigascience/article/4/1/s13742-015-0047-8/2707533?login=false) was developed by researchers at Harvard, and it is widely used in genetics research. There are multiple versions of PLINK -- for our tutorial, version 1.9 is fine (this is the version cited in the methods paper linked above). You can download PLINK 1.9 for free at [this site](https://www.cog-genomics.org/plink/1.9/) -- make sure to pick the download that matches your operating system. 
+
+Next, you need to choose a folder where you will save the PLINK software on your computer. 
+
+  - If you are already a command-line user: the typical place to put this would be `~/.local/bin` -- but you can choose wherever you'd like. 
+  - If you are new to the command line, it's ok for now to save PLINK in the same folder where you are running this tutorial. When we get to later sections of this tutorial, you will need to tell the computer 'where to look' for the *executable* file for PLINK - that is, your `R` session has to know where `plink.exe` is located. You can run `getwd()` in your `R` console right now -- by default, this is where your Rmarkdown or R script document will 'look' for PLINK. If you will use PLINK on multiple projects, pick a central location on your computer (i use `~/bin` on my Mac) and save `plink.exe` here. Then, when you need to do something with PLINK, you can supply the filepath `~/myfolder/plink`. Learning the command line is worth it's own tutorial -- check out [this one](https://missing.csail.mit.edu/2020/course-shell/) to get started learning more. 
+
+To ensure that PLINK has installed correctly, run something like this: 
+
+```{r eval=FALSE}
+system("plink --version")
+```
+
+The `system()` command is a way for you to run commands via `R`. **Note**: you may need to tell your computer where to look for the `plink` executable file -- for example, if you downloaded PLINK and saved it to `~/Downloads/`^[Note: the `~` just stands for your home directory], you will need to run: 
+
+```{r eval=FALSE}
+system("~/Downloads/plink --version")
+```
+
+If PLINK installed correctly, you will see a message print out that looks like this: 
+
+`PLINK v1.90b6.26 64-bit (2 Apr 2022)`
+
 # File formats
 
 The data are given in "PLINK" format, which is the most common format for chip-based GWAS data (as of this writing). `PLINK` is an open-source whole genome association analysis toolset designed to perform a range of basic large-scale analyses in a computationally efficient manner. As part of the toolset, PLINK has its own file formats -- again, these have become the standard format in the GWAS field. Data stored in PLINK format come in 'bundles' -- that is, a PLINK data set consists of a set of files, not just one data file. It is worth knowing how to use the PLINK command line tool to analyze data in these files, but those with no experience on the command line may find that a daunting place to begin. Thankfully, we can also interface with `PLINK` via `R`. The package we will use for this is [bigsnpr](https://privefl.github.io/bigsnpr/).
 
 Let's take a look at the PLINK file structure, examining what information is stored in each file. 
 
-Among the zipped files are three that are necessary to perform a GWAS, the `.bed`, `.bim`, and `.fam` files.
+Among the zipped files are three that are necessary to perform a GWAS, the `.bed`, `.bim`, and `.fam` files. I saved these to a folder called `data/`. 
 
 ## `.fam`
 
@@ -233,35 +258,78 @@ In summary, here are the basic QC steps that (almost) all GWAS need to consider:
 
 (6) We need to consider relatedness in our data -- both the relatedness that is known as well as any latent relationship structure(s).
 
-We can do steps (1), (2), (4), and (5) in one command below: 
+Now, let's attempt to do some quality control for real -- the following code will produce an error, which I think is instructive to see: 
 
 ```{r, eval=FALSE}
 path_to_qc_penncath <- snp_plinkQC(
   plink.path = "~/bin/plink", # you will need to change this according to your machine!
-  prefix.in = "data/penncath", # creates *new* rds with quality-controlled data
-  prefix.out = "data/qc_penncath",
+  prefix.in = "data/penncath", # input current data
+  prefix.out = "data/qc_penncath", # creates *new* rds with quality-controlled data
+  maf = 0.01
+)
+```
+
+The command above is a wrapper for PLINK, and so it will print out messages to the console, so you can follow along with what PLINK is doing. We tried to filter down to just variants (SNPs) with a MAF of at least 1\%, but we get this error from PLINK: 
+
+`Error: .bim file has a split chromosome`
+`Use --make-bed by itself to remedy this.`
+
+This means that our `penncath` data need some reformmating before we can do QC. From `R`, type in the following line to address the issue pointed out in the PLINK error message: 
+
+```{r eval=FALSE}
+system("plink --bfile data/penncath --make-bed --out data/penncath_clean")
+```
+
+Let's go through what each of those options (or 'flags') is doing: 
+
+  - `plink`: calls the program
+  
+  - `--bfile`: tells PLINK that you have `.bed/.bim/.fam` files (PLINK can work with other file types too, but that's beyond the scope of this tutorial). `data/penncath` names the folder with our PLINK data
+  
+  -  `--make-bed`: tells PLINK to make a cleaned-up version of the `.bed` file. New `.fam` and `.bim` files will be created also, to ensure that those 3 files are always in sync. 
+  
+  - `--out`: tells PLINK where to put the to-be-created clean data and what to call these new files. I am creating files with the prefix `penncath_clean` in the `data/` folder. 
+  
+Running the above will also create `data/penncath_clean.log`, which keeps a record of what flags you used to create this data set. Check out that file to make sure everything ran correctly (it will tell you if there was a problem). PLINK will also print out progress messages to your console as it works. 
+  
+Now that we have fixed the 'split chromosome' issue, we can do QC steps (1), (2), (4), and (5) in one command: 
+
+```{r, eval=FALSE}
+path_to_qc_penncath_bed <- snp_plinkQC(
+  plink.path = "~/bin/plink", # again, you may need to change this according to your machine!
+  prefix.in = "data/penncath_clean", # input data
+  prefix.out = "data/qc_penncath", # creates *new* rds with quality-controlled data
   maf = 0.01, # filter out SNPs with MAF < 0.01
   geno = 0.1, # filter out SNPs missing more than 10% of data
   mind = 0.1, # filter out SNPs missing more than 10% of data,
   hwe = 1e-10, # filter out SNPs that have p-vals below this threshold for HWE test
   autosome.only = TRUE # we want chromosomes 1-22 only
+  
 )
 ```
 
-The command above is a wrapper for PLINK, and so it will print out messages to the console, so you can follow along with what PLINK is doing. "Under the hood", PLINK is applying all the filters we want and creating a new set of bed/bim/fam files with the prefix "qc_penncath." We will use these QC'd files in our upcoming analysis. 
+"Under the hood", PLINK is applying all the filters we want and creating a new set of bed/bim/fam files with the prefix "qc_penncath." We will use these QC'd files in our upcoming analysis. 
 
 Step (3) we have done by visual inspection -- in this data set, that is all we need. Step (6) requires quite a bit of explanation, so this step has [its own module](docs/population_structure.html) in this tutorial. 
-
-So, we're getting rid of about 100,000 SNPs and keeping about 750,000.
 
 Now, let's actually do the subsetting. **IMPORTANT:** The key thing to remember here is that when you subset genetic data in PLINK files, you need to subset both the `map` object and the genotypes -- if you don't, these objects will no longer match and you will end up with a devastating row mismatch problem. If you are using `PLINK` (any version) on the command line or `bigsnpr` in `R`, then this is automatically taken care of for you. However, if you are reading in the .bim/.fam files as data frames (as we did at the beginning), then you would need to make sure you subset both files. 
 
 Let's look at our new `RDS` object, the one we just created using our QC steps: 
 
-```{r}
-qc <- snp_attach("path_to_qc_penncath.rds")
+```{r eval=FALSE}
+qc_file_path <- snp_readBed(bedfile = path_to_qc_penncath_bed)
+
+qc <- snp_attach(qc_file_path)
+
+dim(qc$genotypes)
 ```
 
+```{r include=FALSE}
+qc <- snp_attach(rdsfile = "data/qc_penncath.rds")
+```
+
+
+We see that there are `r nrow(qc$genotypes)` samples and `r ncol(qc$genotypes)` variants represented in our new quality controlled data.
 
 Using our QC'd data in `qc_penncath`, we will continue in the next section with [imputation](docs/imputation.html)
 
